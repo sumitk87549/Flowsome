@@ -4,10 +4,13 @@ import { Screen } from '../components/Screen';
 import { AppTitle } from '../components/AppTitle';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { COLORS, SPACING } from '../constants/theme';
+import { NavigationProps, SessionConfig } from '../types';
 
-export function HomeScreen() {
-  const handleOptionPress = (option: string) => {
-    console.log(`Selected option: ${option}`);
+interface HomeScreenProps extends NavigationProps {}
+
+export function HomeScreen({ navigate }: HomeScreenProps) {
+  const handleOptionPress = (type: SessionConfig['type']) => {
+    navigate({ name: 'Config', sessionType: type });
   };
 
   const handleSettingsPress = () => {
