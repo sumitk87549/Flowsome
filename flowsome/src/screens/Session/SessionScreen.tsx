@@ -33,8 +33,7 @@ import { useAppStore } from '../../store/appStore';
 import { useSessionEngine } from '../../features/session/useSessionEngine';
 import { formatSeconds } from '../../utils/time';
 import { RootStackParamList, SessionPhase } from '../../types';
-import { SESSION_EMOJIS } from '../../constants/sessions';
-import { phaseLabel, sessionLabel, t } from '../../localization/i18n';
+import { SESSION_LABELS, SESSION_EMOJIS } from '../../constants/sessions';
 import { TYPE } from '../../constants/typography';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -278,7 +277,7 @@ function ControlButton({
             backgroundColor: filled
               ? accentColor + '1C'
               : 'rgba(255,255,255,0.03)',
-            borderColor: filled ? accentColor + '62' : accentColor + '26',
+            borderColor: filled ? accentColor + '45' : accentColor + '1A',
           },
         ]}
       >
@@ -357,8 +356,6 @@ export function SessionScreen() {
   const pauseSession = useAppStore((s) => s.pauseSession);
   const resumeSession = useAppStore((s) => s.resumeSession);
   const endSession   = useAppStore((s) => s.endSession);
-  const uiLanguage = useAppStore((s) => s.settings.uiLanguage);
-  const sessionLanguage = useAppStore((s) => s.settings.sessionLanguage);
 
   useSessionEngine();
 
@@ -379,13 +376,12 @@ export function SessionScreen() {
   const remaining    = session.totalSeconds - session.elapsedSeconds;
   const progress     = session.elapsedSeconds / Math.max(session.totalSeconds, 1);
 
-  const modeLabel   = sessionLabel(uiLanguage, session.mode);
+  const modeLabel   = SESSION_LABELS[session.mode];
   const modeEmoji   = SESSION_EMOJIS[session.mode];
   const isBreathing = session.mode === 'breathing' || session.mode === 'meditation';
-  const displayedPhaseLabel = phaseLabel(sessionLanguage, currentPhase.phase, currentPhase.label);
 
   return (
-    <ThemedBackground showParticles>
+    <ThemedBackground showParticles={isBreathing}>
       <StatusBar style="light" />
 
       {/* Atmosphere orb — ambient bloom behind the hero */}
@@ -440,7 +436,7 @@ export function SessionScreen() {
                   entering={FadeIn.duration(350)}
                   style={[styles.phaseLabel, { color: theme.subtextColor + 'B0' }]}
                 >
-                  {displayedPhaseLabel}
+                  {currentPhase.label}
                 </Animated.Text>
               </View>
             </Animated.View>
@@ -466,7 +462,7 @@ export function SessionScreen() {
                   entering={FadeIn.duration(350)}
                   style={[styles.phaseLabel, { color: theme.subtextColor + 'A0' }]}
                 >
-                  {displayedPhaseLabel}
+                  {currentPhase.label}
                 </Animated.Text>
               </View>
             </Animated.View>
@@ -480,7 +476,7 @@ export function SessionScreen() {
               style={[styles.pausedBadge, { borderColor: theme.accentColor + '30' }]}
             >
               <Text style={[styles.pausedText, { color: theme.accentColor + '90' }]}>
-                ⏸  {t(uiLanguage, 'session.paused')}
+                ⏸  paused
               </Text>
             </Animated.View>
           )}
@@ -508,14 +504,14 @@ export function SessionScreen() {
           style={styles.controls}
         >
           <ControlButton
-            label={t(uiLanguage, 'session.end')}
+            label="End"
             onPress={handleEnd}
             accentColor={theme.accentColor}
             textColor={theme.textColor}
             flex={1}
           />
           <ControlButton
-            label={session.isPaused ? t(uiLanguage, 'session.resume') : t(uiLanguage, 'session.pause')}
+            label={session.isPaused ? 'Resume' : 'Pause'}
             onPress={handlePauseResume}
             accentColor={theme.accentColor}
             textColor={theme.textColor}
@@ -597,13 +593,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   displayTimer: {
-    fontSize: 66,
+    fontSize: 82,
     fontWeight: '100',
     letterSpacing: -3.5,
     includeFontPadding: false,
   },
   circleTimer: {
-    fontSize: 38,
+    fontSize: 44,
     fontWeight: '200',
     letterSpacing: -1.5,
     includeFontPadding: false,
@@ -619,7 +615,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
     marginTop: -6,
   },
   pausedText: {
@@ -628,7 +624,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   progressTrack: {
-    width: 118,
+    width: 148,
     height: 1.5,
     borderRadius: 1,
     overflow: 'hidden',

@@ -31,9 +31,9 @@ function getTargetScale(phase: SessionPhase): number {
 function getPhaseDuration(phase: SessionPhase): number {
   switch (phase) {
     case 'inhale': return 4000;
-    case 'hold':   return 3800;
+    case 'hold':   return 300;
     case 'exhale': return 6000;
-    case 'rest':   return 1800;
+    case 'rest':   return 2000;
     default:       return 1500;
   }
 }
@@ -50,7 +50,7 @@ export function BreathingCircle({ phase, size = 210 }: BreathingCircleProps) {
   useEffect(() => {
     const target   = getTargetScale(phase);
     const dur      = getPhaseDuration(phase);
-    const easeType = Easing.bezier(0.22, 1, 0.36, 1);
+    const easeType = Easing.bezier(0.4, 0, 0.2, 1);
 
     // Core scale
     scale.value = withTiming(target, { duration: dur, easing: easeType });
@@ -147,8 +147,8 @@ export function BreathingCircle({ phase, size = 210 }: BreathingCircleProps) {
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: accent + '14',
-        borderColor: accent + '45',
+        backgroundColor: accent + '0F',
+        borderColor: accent + '38',
       }]} />
 
       {/* Center anchor dot */}
