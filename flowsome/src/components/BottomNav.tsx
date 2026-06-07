@@ -4,6 +4,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { useAppStore } from '../store/appStore';
+import { t } from '../localization/i18n';
 import { RootStackParamList } from '../types';
 import { TYPE } from '../constants/typography';
 import Animated, {
@@ -16,15 +18,15 @@ import Animated, {
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface NavItem {
-  label: string;
+  labelKey: 'nav.home' | 'nav.themes' | 'nav.settings';
   route: keyof RootStackParamList;
   icon: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Home', route: 'Home', icon: '◉' },
-  { label: 'Themes', route: 'Themes', icon: '◈' },
-  { label: 'Settings', route: 'Settings', icon: '◎' },
+  { labelKey: 'nav.home', route: 'Home', icon: '◉' },
+  { labelKey: 'nav.themes', route: 'Themes', icon: '◈' },
+  { labelKey: 'nav.settings', route: 'Settings', icon: '◎' },
 ];
 
 export function BottomNav() {
@@ -32,6 +34,7 @@ export function BottomNav() {
   const route = useRoute();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const uiLanguage = useAppStore((s) => s.settings.uiLanguage);
 
   return (
     <Animated.View
@@ -54,6 +57,7 @@ export function BottomNav() {
             onPress={() => {
               if (!isActive) navigation.navigate(item.route as any);
             }}
+            uiLanguage={uiLanguage}
           />
         );
       })}
@@ -65,9 +69,10 @@ interface NavTabProps {
   item: NavItem;
   isActive: boolean;
   onPress: () => void;
+  uiLanguage: ReturnType<typeof useAppStore.getState>['settings']['uiLanguage'];
 }
 
-function NavTab({ item, isActive, onPress }: NavTabProps) {
+function NavTab({ item, isActive, onPress, uiLanguage }: NavTabProps) {
   const theme = useTheme();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
@@ -102,12 +107,12 @@ function NavTab({ item, isActive, onPress }: NavTabProps) {
           style={[
             styles.tabLabel,
             {
-              color: isActive ? theme.accentColor : theme.subtextColor + '38',
+              color: isActive ? theme.accentColor : theme.subtextColor + '52',
               fontWeight: isActive ? '600' : '400',
             },
           ]}
         >
-          {item.label}
+          {t(uiLanguage, item.labelKey)}
         </Text>
         {isActive && (
           <View style={[styles.activePip, { backgroundColor: theme.accentColor }]} />

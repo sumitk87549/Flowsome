@@ -1,3 +1,5 @@
+import { ImageSourcePropType } from 'react-native';
+
 export type SessionMode = 'pomodoro' | 'focus' | 'breathing' | 'meditation';
 
 export type SessionPhase =
@@ -34,21 +36,44 @@ export interface SessionState {
   config: SessionConfig | null;
 }
 
+export type SceneId = 'rajasthan' | 'kerala' | 'assam' | 'himalaya' | 'andaman';
+export type ParticlePreset = 'sand' | 'mistLeaves' | 'fog' | 'snow' | 'bubbles';
+export type AmbientPreset = 'desertWind' | 'rainforestWater' | 'teaGardenWind' | 'mountainWind' | 'oceanWaves';
+export type AnimationStyle = 'heatShimmer' | 'waterMist' | 'grassSway' | 'movingFog' | 'waterShimmer';
+export type ThemeMode = 'auto' | 'light' | 'dark';
+export type AppLanguage = 'en' | 'hi' | 'bn' | 'ta' | 'te';
+
+export interface SceneButtonStyle {
+  backgroundColor: string;
+  borderColor: string;
+  textColor: string;
+}
+
 export interface AppTheme {
-  id: string;
+  id: SceneId;
   name: string;
-  accentColor: string;
+  subtitle: string;
+  feeling: string;
+  backgroundImage: ImageSourcePropType;
   backgroundGradient: [string, string, ...string[]];
+  lightGradient: [string, string, ...string[]];
+  accentColor: string;
+  secondaryAccentColor: string;
+  buttonStyle: SceneButtonStyle;
+  particlePreset: ParticlePreset;
   particleDensity: number;
+  ambientPreset: AmbientPreset;
+  ambientSound: string;
+  animationStyle: AnimationStyle;
+  voicePreset: string;
   textColor: string;
   subtextColor: string;
-  ambientSound: string;
 }
 
 export interface SettingsState {
-  uiLanguage: string;
-  sessionLanguage: string;
-  darkMode: boolean;
+  uiLanguage: AppLanguage;
+  sessionLanguage: AppLanguage;
+  themeMode: ThemeMode;
 }
 
 export interface ProgressState {

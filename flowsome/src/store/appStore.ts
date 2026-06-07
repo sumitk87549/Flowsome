@@ -1,16 +1,13 @@
 import { create } from 'zustand';
-import { AppTheme, SessionState, SettingsState, ProgressState, SessionMode, SessionConfig } from '../types';
-import { THEMES, DEFAULT_THEME_ID } from '../constants/themes';
+import { AppLanguage, AppTheme, ProgressState, SceneId, SessionConfig, SessionMode, SessionState, SettingsState, ThemeMode } from '../types';
+import { DEFAULT_THEME_ID, THEMES } from '../constants/themes';
 import { SESSION_CONFIGS } from '../constants/sessions';
-
-// ─── Theme Slice ────────────────────────────────────────────────────────────
+import { loadSceneId, loadSettings, saveSceneId, saveSettings } from '../services/storage';
 
 interface ThemeSlice {
   currentTheme: AppTheme;
-  setTheme: (id: string) => void;
+  setTheme: (id: SceneId) => void;
 }
-
-// ─── Session Slice ───────────────────────────────────────────────────────────
 
 interface SessionSlice {
   session: SessionState;
@@ -21,23 +18,17 @@ interface SessionSlice {
   tickSession: () => void;
 }
 
-// ─── Settings Slice ──────────────────────────────────────────────────────────
-
 interface SettingsSlice {
   settings: SettingsState;
-  setUiLanguage: (lang: string) => void;
-  setSessionLanguage: (lang: string) => void;
-  toggleDarkMode: () => void;
+  setUiLanguage: (lang: AppLanguage) => void;
+  setSessionLanguage: (lang: AppLanguage) => void;
+  setThemeMode: (mode: ThemeMode) => void;
 }
-
-// ─── Progress Slice ──────────────────────────────────────────────────────────
 
 interface ProgressSlice {
   progress: ProgressState;
   recordSession: (minutes: number) => void;
 }
-
-// ─── Full Store ───────────────────────────────────────────────────────────────
 
 export type AppStore = ThemeSlice & SessionSlice & SettingsSlice & ProgressSlice;
 
@@ -53,9 +44,9 @@ const DEFAULT_SESSION: SessionState = {
 };
 
 const DEFAULT_SETTINGS: SettingsState = {
-  uiLanguage: 'English',
-  sessionLanguage: 'English',
-  darkMode: false,
+  uiLanguage: 'en',
+  sessionLanguage: 'en',
+  themeMode: 'auto',
 };
 
 const DEFAULT_PROGRESS: ProgressState = {
@@ -64,15 +55,23 @@ const DEFAULT_PROGRESS: ProgressState = {
   lastSessionDate: null,
 };
 
+const initialSceneId = loadSceneId(DEFAULT_THEME_ID);
+const initialSettings = loadSettings(DEFAULT_SETTINGS);
+
+function getThemeById(id: SceneId): AppTheme {
+  return THEMES.find((t) => t.id === id) ?? THEMES[0];
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
-  // ── Theme ──
-  currentTheme: THEMES.find((t) => t.id === DEFAULT_THEME_ID) ?? THEMES[0],
+  currentTheme: getThemeById(initialSceneId),
   setTheme: (id) => {
     const theme = THEMES.find((t) => t.id === id);
-    if (theme) set({ currentTheme: theme });
+    if (theme) {
+      saveSceneId(id);
+      set({ currentTheme: theme });
+    }
   },
 
-  // ── Session ──
   session: DEFAULT_SESSION,
 
   startSession: (mode) => {
@@ -118,15 +117,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const nextElapsed = elapsedSeconds + 1;
 
     if (nextElapsed >= totalSeconds) {
-      // Advance phase
       const phases = config.phases;
       const nextPhaseIndex = currentPhaseIndex + 1;
 
       if (nextPhaseIndex >= phases.length) {
-        // Advance cycle
         const nextCycle = currentCycle + 1;
         if (nextCycle > config.cycles) {
-          // Session complete
           set({ session: { ...session, isActive: false, elapsedSeconds: totalSeconds } });
           get().recordSession(Math.floor(totalSeconds / 60));
         } else {
@@ -155,18 +151,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  // ── Settings ──
-  settings: DEFAULT_SETTINGS,
+  settings: initialSettings,
   setUiLanguage: (uiLanguage) =>
-    set((state) => ({ settings: { ...state.settings, uiLanguage } })),
+    set((state) => {
+      const settings = { ...state.settings, uiLanguage };
+      saveSettings(settings);
+      return { settings };
+    }),
   setSessionLanguage: (sessionLanguage) =>
-    set((state) => ({ settings: { ...state.settings, sessionLanguage } })),
-  toggleDarkMode: () =>
-    set((state) => ({
-      settings: { ...state.settings, darkMode: !state.settings.darkMode },
-    })),
+    set((state) => {
+      const settings = { ...state.settings, sessionLanguage };
+      saveSettings(settings);
+      return { settings };
+    }),
+  setThemeMode: (themeMode) =>
+    set((state) => {
+      const settings = { ...state.settings, themeMode };
+      saveSettings(settings);
+      return { settings };
+    }),
 
-  // ── Progress ──
   progress: DEFAULT_PROGRESS,
   recordSession: (minutes) =>
     set((state) => ({

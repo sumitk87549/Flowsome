@@ -52,19 +52,19 @@ export function SessionButton({ emoji, label, onPress, style }: SessionButtonPro
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
-        style={[styles.button, { borderColor: theme.accentColor + '20' }]}
+        style={[styles.button, { borderColor: theme.buttonStyle.borderColor, backgroundColor: theme.buttonStyle.backgroundColor }]}
       >
         {/* Press glow */}
         <Animated.View
           style={[
             styles.pressGlow,
             glowStyle,
-            { backgroundColor: theme.accentColor + '0C' },
+            { backgroundColor: theme.accentColor + '16' },
           ]}
         />
 
         <Text style={styles.emoji}>{emoji}</Text>
-        <Text style={[styles.label, { color: theme.textColor + 'CC' }]}>{label}</Text>
+        <Text style={[styles.label, { color: theme.buttonStyle.textColor }]}>{label}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -76,14 +76,13 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: 30,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 24,
+    paddingVertical: 26,
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.025)',
-    gap: 14,
+        gap: 16,
     overflow: 'hidden',
   },
   pressGlow: {
@@ -94,7 +93,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   emoji: {
-    fontSize: 34,
+    fontSize: 30,
   },
   label: {
     ...TYPE.CAPTION,
