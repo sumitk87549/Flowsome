@@ -1,147 +1,155 @@
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
-import { ParticlePreset } from '../types';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withDelay,
+  withSequence,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 interface ParticleConfig {
   id: number;
   x: number;
-  y: number;
+  startY: number;
   size: number;
   duration: number;
   delay: number;
   opacity: number;
-  driftX: number;
-  driftY: number;
-  radius: number;
-  shape: 'circle' | 'leaf' | 'fog';
 }
 
 interface ParticleLayerProps {
   accentColor: string;
   count: number;
-  preset: ParticlePreset;
 }
 
-const PRESET_META: Record<ParticlePreset, { max: number; shape: ParticleConfig['shape']; baseOpacity: number; size: [number, number]; direction: [number, number] }> = {
-  sand: { max: 18, shape: 'circle', baseOpacity: 0.18, size: [1.4, 3.2], direction: [36, -26] },
-  mistLeaves: { max: 22, shape: 'fog', baseOpacity: 0.14, size: [18, 54], direction: [20, -38] },
-  fog: { max: 16, shape: 'fog', baseOpacity: 0.12, size: [34, 86], direction: [30, -18] },
-  snow: { max: 20, shape: 'circle', baseOpacity: 0.2, size: [1.8, 4.4], direction: [14, 70] },
-  bubbles: { max: 22, shape: 'circle', baseOpacity: 0.16, size: [2.5, 7], direction: [18, -86] },
-};
+// ─── Single Particle ─────────────────────────────────────────────────────────
 
-function seeded(index: number, salt: number): number {
-  const t = ((index + 1) * 2654435761) >>> 0;
-  return ((t ^ salt) % 1000) / 1000;
-}
-
-const Particle = memo(function Particle({ config, accentColor, preset }: { config: ParticleConfig; accentColor: string; preset: ParticlePreset }) {
-  const translate = useSharedValue(0);
-  const alpha = useSharedValue(0);
-  const scale = useSharedValue(0.86);
+function Particle({
+  x,
+  startY,
+  size,
+  duration,
+  delay,
+  maxOpacity,
+  accentColor,
+}: ParticleConfig & { maxOpacity: number; accentColor: string }) {
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.6);
 
   useEffect(() => {
-    translate.value = withDelay(
-      config.delay,
-      withRepeat(withTiming(1, { duration: config.duration, easing: Easing.inOut(Easing.ease) }), -1, false)
+    // Float upward
+    translateY.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(-H * 0.55, { duration, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        false
+      )
     );
-    alpha.value = withDelay(
-      config.delay,
+
+    // Fade in → sustain → fade out
+    opacity.value = withDelay(
+      delay,
       withRepeat(
         withSequence(
-          withTiming(config.opacity, { duration: config.duration * 0.24, easing: Easing.out(Easing.ease) }),
-          withTiming(config.opacity * 0.72, { duration: config.duration * 0.48, easing: Easing.linear }),
-          withTiming(0, { duration: config.duration * 0.28, easing: Easing.in(Easing.ease) })
+          withTiming(maxOpacity, { duration: duration * 0.25, easing: Easing.out(Easing.ease) }),
+          withTiming(maxOpacity * 0.7, { duration: duration * 0.5 }),
+          withTiming(0, { duration: duration * 0.25, easing: Easing.in(Easing.ease) })
         ),
         -1,
         false
       )
     );
+
+    // Gentle scale pulse
     scale.value = withDelay(
-      config.delay,
+      delay,
       withRepeat(
         withSequence(
-          withTiming(1.06, { duration: config.duration * 0.45, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.82, { duration: config.duration * 0.55, easing: Easing.inOut(Easing.ease) })
+          withTiming(1, { duration: duration * 0.4 }),
+          withTiming(0.5, { duration: duration * 0.6 })
         ),
         -1,
-        true
+        false
       )
     );
-  }, [alpha, config.delay, config.duration, config.opacity, scale, translate]);
+
+    return () => {
+      translateY.value = 0;
+      opacity.value = 0;
+    };
+  }, []);
 
   const style = useAnimatedStyle(() => ({
-    opacity: alpha.value,
     transform: [
-      { translateX: translate.value * config.driftX },
-      { translateY: translate.value * config.driftY },
+      { translateY: translateY.value },
       { scale: scale.value },
-      { rotate: `${translate.value * (preset === 'mistLeaves' ? 28 : 8)}deg` },
     ],
+    opacity: opacity.value,
   }));
-
-  const isFog = config.shape === 'fog';
-  const isLeaf = config.shape === 'leaf';
 
   return (
     <Animated.View
-      pointerEvents="none"
       style={[
-        styles.particle,
         style,
         {
-          left: config.x,
-          top: config.y,
-          width: config.size,
-          height: isFog ? config.size * 0.36 : isLeaf ? config.size * 0.55 : config.size,
-          borderRadius: config.radius,
-          backgroundColor: isFog ? accentColor + '28' : accentColor,
-          borderWidth: preset === 'bubbles' ? StyleSheet.hairlineWidth : 0,
-          borderColor: preset === 'bubbles' ? accentColor + 'A0' : 'transparent',
+          position: 'absolute',
+          left: x,
+          top: startY,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: accentColor,
         },
       ]}
     />
   );
-});
+}
 
-export const ParticleLayer = memo(function ParticleLayer({ accentColor, count, preset }: ParticleLayerProps) {
-  const meta = PRESET_META[preset];
-  const safeCount = Math.min(count, meta.max);
+// ─── Layer ───────────────────────────────────────────────────────────────────
 
-  const particles = useMemo<ParticleConfig[]>(() => {
+/**
+ * ParticleLayer renders floating ambient particles.
+ * count is capped at 16 for performance.
+ * Each particle has deterministic-random placement seeded by its index.
+ */
+export function ParticleLayer({ accentColor, count }: ParticleLayerProps) {
+  const safeCount = Math.min(count, 16);
+
+  const particles: ParticleConfig[] = useMemo(() => {
     return Array.from({ length: safeCount }, (_, i) => {
-      const size = meta.size[0] + seeded(i, 0xfeedface) * (meta.size[1] - meta.size[0]);
-      const shape: ParticleConfig['shape'] = preset === 'mistLeaves' && i % 7 === 0 ? 'leaf' : meta.shape;
+      // Pseudo-random using index as seed — deterministic, no Math.random() on re-render
+      const t = (i * 2654435761) >>> 0; // Knuth multiplicative hash
+      const norm = (n: number) => (n % 1000) / 1000; // 0..1
+
       return {
         id: i,
-        x: seeded(i, 0xdeadbeef) * (W - 32) + 16,
-        y: seeded(i, 0xcafebabe) * H * 0.92 + H * 0.04,
-        size,
-        duration: 9000 + seeded(i, 0xbaddcafe) * 11000,
-        delay: seeded(i, 0xabadc0de) * 5000,
-        opacity: meta.baseOpacity + seeded(i, 0x1337beef) * 0.1,
-        driftX: (seeded(i, 0x5185) - 0.5) * meta.direction[0] * 2,
-        driftY: meta.direction[1] * (0.72 + seeded(i, 0x7219) * 0.56),
-        radius: shape === 'leaf' ? size * 0.5 : size / 2,
-        shape,
+        x: norm(t ^ 0xdeadbeef) * (W - 20) + 10,
+        startY: H * 0.4 + norm(t ^ 0xcafebabe) * H * 0.45,
+        size: 2 + norm(t ^ 0xfeedface) * 2.5,   // 2–4.5px
+        duration: 8000 + norm(t ^ 0xbaddcafe) * 6000, // 8–14s
+        delay: norm(t ^ 0xabadc0de) * 5000,          // 0–5s initial delay
+        opacity: 0.15 + norm(t ^ 0x1337beef) * 0.2,  // 0.15–0.35
       };
     });
-  }, [meta, preset, safeCount]);
+  }, [safeCount]);
 
   return (
     <>
-      {particles.map((config) => (
-        <Particle key={`${preset}-${config.id}`} config={config} accentColor={accentColor} preset={preset} />
+      {particles.map((p) => (
+        <Particle
+          key={p.id}
+          {...p}
+          maxOpacity={p.opacity}
+          accentColor={accentColor}
+        />
       ))}
     </>
   );
-});
-
-const styles = StyleSheet.create({
-  particle: {
-    position: 'absolute',
-  },
-});
+}
