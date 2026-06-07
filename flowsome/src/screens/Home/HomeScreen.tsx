@@ -21,7 +21,8 @@ import { SessionButton } from '../../components/SessionButton';
 import { useTheme } from '../../context/ThemeContext';
 import { useAppStore } from '../../store/appStore';
 import { RootStackParamList, SessionMode } from '../../types';
-import { SESSION_LABELS, SESSION_EMOJIS } from '../../constants/sessions';
+import { SESSION_EMOJIS } from '../../constants/sessions';
+import { sessionLabel, t } from '../../localization/i18n';
 import { TYPE } from '../../constants/typography';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -41,6 +42,7 @@ export function HomeScreen() {
   const navigation  = useNavigation<NavProp>();
   const theme       = useTheme();
   const startSession = useAppStore((s) => s.startSession);
+  const uiLanguage = useAppStore((s) => s.settings.uiLanguage);
 
   function handleMode(mode: SessionMode) {
     startSession(mode);
@@ -68,7 +70,7 @@ export function HomeScreen() {
           <Animated.View entering={FadeInUp.delay(60).duration(700)} style={styles.header}>
             <Text style={[styles.wordmark, { color: theme.textColor }]}>Flowsome</Text>
             <View style={[styles.wordmarkRule, { backgroundColor: theme.accentColor + '45' }]} />
-            <Text style={[styles.tagline, { color: theme.subtextColor }]}>Find your flow</Text>
+            <Text style={[styles.tagline, { color: theme.subtextColor }]}>{t(uiLanguage, 'home.findYourFlow')}</Text>
           </Animated.View>
 
           {/* 2 × 2 session button grid */}
@@ -82,7 +84,7 @@ export function HomeScreen() {
                 >
                   <SessionButton
                     emoji={SESSION_EMOJIS[mode]}
-                    label={SESSION_LABELS[mode]}
+                    label={sessionLabel(uiLanguage, mode)}
                     onPress={() => handleMode(mode)}
                   />
                 </Animated.View>
@@ -97,7 +99,7 @@ export function HomeScreen() {
                 >
                   <SessionButton
                     emoji={SESSION_EMOJIS[mode]}
-                    label={SESSION_LABELS[mode]}
+                    label={sessionLabel(uiLanguage, mode)}
                     onPress={() => handleMode(mode)}
                   />
                 </Animated.View>
@@ -112,13 +114,14 @@ export function HomeScreen() {
           >
             <View style={styles.themeCardRow}>
               <Text style={[styles.themeCardLabel, { color: theme.subtextColor + '80' }]}>
-                Active Theme
+                {t(uiLanguage, 'home.activeScene')}
               </Text>
               <View style={[styles.themeColorPip, { backgroundColor: theme.accentColor }]} />
             </View>
             <Text style={[styles.themeCardName, { color: theme.textColor }]}>
               {theme.name}
             </Text>
+            <Text style={[styles.themeCardSubtitle, { color: theme.subtextColor + '90' }]}>{theme.subtitle}</Text>
             <View style={[styles.themeCardRule, { backgroundColor: theme.accentColor + '45' }]} />
           </Animated.View>
         </ScrollView>
@@ -175,7 +178,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     paddingBottom: 22,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
     gap: 9,
   },
   themeCardRow: {
@@ -195,6 +198,10 @@ const styles = StyleSheet.create({
   themeCardName: {
     ...TYPE.HEADING,
     fontWeight: '200',
+  },
+  themeCardSubtitle: {
+    ...TYPE.BODY,
+    fontWeight: '300',
   },
   themeCardRule: {
     width: 40,

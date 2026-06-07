@@ -1,231 +1,141 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import Animated, {
-  FadeInDown,
-  FadeInUp,
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { ThemedBackground } from '../../components/ThemedBackground';
 import { BottomNav } from '../../components/BottomNav';
+import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../context/ThemeContext';
 import { useAppStore } from '../../store/appStore';
 import { THEMES } from '../../constants/themes';
 import { AppTheme } from '../../types';
 import { TYPE } from '../../constants/typography';
+import { t } from '../../localization/i18n';
 
 export function ThemesScreen() {
-  const theme    = useTheme();
+  const theme = useTheme();
   const setTheme = useAppStore((s) => s.setTheme);
+  const uiLanguage = useAppStore((s) => s.settings.uiLanguage);
 
   return (
     <ThemedBackground>
       <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeInUp.duration(600)} style={styles.header}>
-            <Text style={[styles.title, { color: theme.textColor }]}>Themes</Text>
+            <Text style={[styles.title, { color: theme.textColor }]}>{t(uiLanguage, 'themes.title')}</Text>
             <View style={[styles.rule, { backgroundColor: theme.accentColor + '45' }]} />
-            <Text style={[styles.subtitle, { color: theme.subtextColor }]}>
-              India's landscapes
-            </Text>
+            <Text style={[styles.subtitle, { color: theme.subtextColor }]}>{t(uiLanguage, 'themes.subtitle')}</Text>
           </Animated.View>
 
-          {/* Hint */}
-          <Animated.Text
-            entering={FadeInDown.delay(80).duration(500)}
-            style={[styles.hint, { color: theme.subtextColor + '55' }]}
-          >
-            Tap a scene to apply — backgrounds cross-fade instantly
+          <Animated.Text entering={FadeInDown.delay(80).duration(500)} style={[styles.hint, { color: theme.subtextColor + '75' }]}>
+            {t(uiLanguage, 'themes.hint')}
           </Animated.Text>
 
-          {/* Theme list */}
           <View style={styles.list}>
-            {THEMES.map((t, i) => (
-              <ThemeRow
-                key={t.id}
-                themeOption={t}
-                isActive={t.id === theme.id}
-                onPress={() => setTheme(t.id)}
-                delay={120 + i * 80}
+            {THEMES.map((scene, index) => (
+              <SceneCard
+                key={scene.id}
+                scene={scene}
+                isActive={scene.id === theme.id}
+                currentTheme={theme}
+                onPress={() => setTheme(scene.id)}
+                delay={130 + index * 80}
+                selectedLabel={t(uiLanguage, 'scene.choose')}
               />
             ))}
           </View>
         </ScrollView>
-
         <BottomNav />
       </SafeAreaView>
     </ThemedBackground>
   );
 }
 
-// ─── Theme Row ────────────────────────────────────────────────────────────────
-
-interface ThemeRowProps {
-  themeOption: AppTheme;
+function SceneCard({
+  scene,
+  currentTheme,
+  isActive,
+  onPress,
+  delay,
+  selectedLabel,
+}: {
+  scene: AppTheme;
+  currentTheme: AppTheme;
   isActive: boolean;
   onPress: () => void;
   delay: number;
-}
-
-function ThemeRow({ themeOption, isActive, onPress, delay }: ThemeRowProps) {
-  const currentTheme = useTheme();
-  const scale        = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  selectedLabel: string;
+}) {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
-    <Animated.View
-      entering={FadeInDown.delay(delay).duration(500).springify().damping(18)}
-      style={animStyle}
-    >
+    <Animated.View entering={FadeInDown.delay(delay).duration(600).springify().damping(20)} style={animStyle}>
       <TouchableOpacity
         onPress={onPress}
-        onPressIn={() => {
-          scale.value = withSpring(0.96, { damping: 14, stiffness: 320 });
-        }}
-        onPressOut={() => {
-          scale.value = withSpring(1, { damping: 10, stiffness: 200 });
-        }}
+        onPressIn={() => { scale.value = withSpring(0.975, { damping: 16, stiffness: 280 }); }}
+        onPressOut={() => { scale.value = withSpring(1, { damping: 12, stiffness: 180 }); }}
         activeOpacity={1}
-        style={[
-          styles.row,
-          {
-            borderColor: isActive
-              ? themeOption.accentColor + '55'
-              : currentTheme.accentColor + '12',
-            backgroundColor: isActive
-              ? themeOption.accentColor + '07'
-              : 'rgba(255,255,255,0.02)',
-          },
-        ]}
+        style={[styles.card, { borderColor: isActive ? scene.accentColor + '80' : currentTheme.accentColor + '18' }]}
       >
-        {/* Gradient swatch */}
-        <View style={styles.swatchWrap}>
+        <ImageBackground source={scene.backgroundImage} resizeMode="cover" style={StyleSheet.absoluteFill}>
           <LinearGradient
-            colors={themeOption.backgroundGradient}
+            colors={[scene.backgroundGradient[0], 'transparent', scene.backgroundGradient[3]]}
+            locations={[0, 0.42, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
-          {/* Accent pip */}
-          <View
-            style={[styles.swatchPip, { backgroundColor: themeOption.accentColor }]}
-          />
-        </View>
-
-        {/* Info */}
-        <View style={styles.info}>
-          <Text style={[styles.themeName, { color: currentTheme.textColor }]}>
-            {themeOption.name}
-          </Text>
-          <Text style={[styles.themeSound, { color: currentTheme.subtextColor + '70' }]}>
-            {themeOption.ambientSound.replace(/_/g, ' ')}
-          </Text>
-          {/* Particle density badge */}
-          <Text style={[styles.particleBadge, { color: themeOption.accentColor + '90' }]}>
-            {themeOption.particleDensity > 25 ? '✦ Dense particles' :
-             themeOption.particleDensity > 15 ? '✦ Soft particles' : '✦ Minimal'}
-          </Text>
-        </View>
-
-        {/* Active check */}
-        {isActive ? (
-          <View
-            style={[styles.checkWrap, { borderColor: themeOption.accentColor }]}
-          >
-            <Text style={[styles.checkMark, { color: themeOption.accentColor }]}>
-              ✓
-            </Text>
+        </ImageBackground>
+        <View style={styles.cardContent}>
+          <View style={styles.cardTopRow}>
+            <View style={[styles.accentLine, { backgroundColor: scene.accentColor }]} />
+            {isActive ? (
+              <View style={[styles.selectedPill, { borderColor: scene.accentColor + '75', backgroundColor: scene.accentColor + '18' }]}>
+                <Text style={[styles.selectedText, { color: scene.accentColor }]}>{selectedLabel}</Text>
+              </View>
+            ) : null}
           </View>
-        ) : (
-          <View
-            style={[styles.inactiveCircle, { borderColor: currentTheme.accentColor + '20' }]}
-          />
-        )}
+          <View style={styles.cardCopy}>
+            <Text style={[styles.sceneName, { color: scene.textColor }]}>{scene.name}</Text>
+            <Text style={[styles.sceneSubtitle, { color: scene.subtextColor }]}>{scene.subtitle}</Text>
+            <Text style={[styles.sceneFeeling, { color: scene.textColor + 'B8' }]}>{scene.feeling}</Text>
+          </View>
+          <Text style={[styles.ambient, { color: scene.accentColor + 'D0' }]}>{scene.ambientSound}</Text>
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe:   { flex: 1 },
+  safe: { flex: 1 },
   scroll: { flex: 1 },
-  content: {
-    paddingHorizontal: 28,
-    paddingTop: 24,
-    paddingBottom: 28,
-    gap: 28,
-  },
-  header:   { gap: 12 },
-  title:    { ...TYPE.TITLE },
-  rule:     { width: 32, height: 1.5, borderRadius: 1 },
+  content: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 28, gap: 24 },
+  header: { gap: 12, paddingHorizontal: 4 },
+  title: { ...TYPE.TITLE },
+  rule: { width: 32, height: 1.5, borderRadius: 1 },
   subtitle: { ...TYPE.BODY, letterSpacing: 1.5, fontWeight: '300' },
-  hint: {
-    fontSize: 12,
-    fontWeight: '300',
-    letterSpacing: 0.3,
-    marginTop: -4,
-  },
-  list: { gap: 10 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 22,
-    padding: 16,
-    gap: 16,
-  },
-  swatchWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+  hint: { ...TYPE.BODY, fontWeight: '300', lineHeight: 21, paddingHorizontal: 4 },
+  list: { gap: 16 },
+  card: {
+    height: 188,
+    borderRadius: 30,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  swatchPip: {
-    width: 20,
-    height: 3,
-    borderRadius: 1.5,
-    marginBottom: 8,
-    opacity: 0.9,
-  },
-  info: { flex: 1, gap: 4 },
-  themeName:     { ...TYPE.SUBHEADING },
-  themeSound:    { ...TYPE.CAPTION, letterSpacing: 1, textTransform: 'capitalize' },
-  particleBadge: { fontSize: 10, fontWeight: '300', letterSpacing: 0.5, marginTop: 2 },
-  checkWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkMark: { fontSize: 12, fontWeight: '700', marginTop: -1 },
-  inactiveCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
     borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.035)',
   },
+  cardContent: { flex: 1, padding: 20, justifyContent: 'space-between' },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  accentLine: { width: 34, height: 2, borderRadius: 1 },
+  selectedPill: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  selectedText: { ...TYPE.MICRO, textTransform: 'uppercase' },
+  cardCopy: { gap: 5 },
+  sceneName: { ...TYPE.HEADING, fontWeight: '300' },
+  sceneSubtitle: { ...TYPE.BODY, fontWeight: '300' },
+  sceneFeeling: { fontSize: 13, letterSpacing: 0.3, fontWeight: '300', marginTop: 4 },
+  ambient: { ...TYPE.CAPTION, textTransform: 'uppercase' },
 });
