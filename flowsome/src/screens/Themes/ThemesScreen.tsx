@@ -19,12 +19,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { BottomNav } from '../../components/BottomNav';
+import { useTheme } from '../../context/ThemeContext';
 import { useAppStore } from '../../store/appStore';
 import { THEMES } from '../../constants/themes';
 import { AppTheme } from '../../types';
+import { TYPE } from '../../constants/typography';
 
 export function ThemesScreen() {
-  const theme = useAppStore((s) => s.currentTheme);
+  const theme    = useTheme();
   const setTheme = useAppStore((s) => s.setTheme);
 
   return (
@@ -36,13 +38,24 @@ export function ThemesScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {/* Header */}
           <Animated.View entering={FadeInUp.duration(600)} style={styles.header}>
             <Text style={[styles.title, { color: theme.textColor }]}>Themes</Text>
+            <View style={[styles.rule, { backgroundColor: theme.accentColor + '45' }]} />
             <Text style={[styles.subtitle, { color: theme.subtextColor }]}>
               India's landscapes
             </Text>
           </Animated.View>
 
+          {/* Hint */}
+          <Animated.Text
+            entering={FadeInDown.delay(80).duration(500)}
+            style={[styles.hint, { color: theme.subtextColor + '55' }]}
+          >
+            Tap a scene to apply — backgrounds cross-fade instantly
+          </Animated.Text>
+
+          {/* Theme list */}
           <View style={styles.list}>
             {THEMES.map((t, i) => (
               <ThemeRow
@@ -50,7 +63,7 @@ export function ThemesScreen() {
                 themeOption={t}
                 isActive={t.id === theme.id}
                 onPress={() => setTheme(t.id)}
-                delay={i * 80}
+                delay={120 + i * 80}
               />
             ))}
           </View>
@@ -62,6 +75,8 @@ export function ThemesScreen() {
   );
 }
 
+// ─── Theme Row ────────────────────────────────────────────────────────────────
+
 interface ThemeRowProps {
   themeOption: AppTheme;
   isActive: boolean;
@@ -70,61 +85,80 @@ interface ThemeRowProps {
 }
 
 function ThemeRow({ themeOption, isActive, onPress, delay }: ThemeRowProps) {
-  const currentTheme = useAppStore((s) => s.currentTheme);
-  const scale = useSharedValue(1);
+  const currentTheme = useTheme();
+  const scale        = useSharedValue(1);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
-  function handlePressIn() {
-    scale.value = withSpring(0.97, { damping: 14, stiffness: 260 });
-  }
-  function handlePressOut() {
-    scale.value = withSpring(1, { damping: 14, stiffness: 260 });
-  }
-
   return (
     <Animated.View
-      entering={FadeInDown.delay(delay).duration(500)}
+      entering={FadeInDown.delay(delay).duration(500).springify().damping(18)}
       style={animStyle}
     >
       <TouchableOpacity
         onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
+        onPressIn={() => {
+          scale.value = withSpring(0.96, { damping: 14, stiffness: 320 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 10, stiffness: 200 });
+        }}
         activeOpacity={1}
         style={[
           styles.row,
           {
             borderColor: isActive
-              ? themeOption.accentColor + '80'
-              : currentTheme.accentColor + '20',
+              ? themeOption.accentColor + '55'
+              : currentTheme.accentColor + '12',
+            backgroundColor: isActive
+              ? themeOption.accentColor + '07'
+              : 'rgba(255,255,255,0.02)',
           },
         ]}
       >
         {/* Gradient swatch */}
-        <LinearGradient
-          colors={themeOption.backgroundGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.swatch}
-        />
+        <View style={styles.swatchWrap}>
+          <LinearGradient
+            colors={themeOption.backgroundGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Accent pip */}
+          <View
+            style={[styles.swatchPip, { backgroundColor: themeOption.accentColor }]}
+          />
+        </View>
 
         {/* Info */}
-        <View style={styles.rowInfo}>
-          <Text style={[styles.rowName, { color: currentTheme.textColor }]}>
+        <View style={styles.info}>
+          <Text style={[styles.themeName, { color: currentTheme.textColor }]}>
             {themeOption.name}
           </Text>
-          <Text style={[styles.rowSound, { color: currentTheme.subtextColor }]}>
+          <Text style={[styles.themeSound, { color: currentTheme.subtextColor + '70' }]}>
             {themeOption.ambientSound.replace(/_/g, ' ')}
+          </Text>
+          {/* Particle density badge */}
+          <Text style={[styles.particleBadge, { color: themeOption.accentColor + '90' }]}>
+            {themeOption.particleDensity > 25 ? '✦ Dense particles' :
+             themeOption.particleDensity > 15 ? '✦ Soft particles' : '✦ Minimal'}
           </Text>
         </View>
 
-        {/* Active indicator */}
-        {isActive && (
+        {/* Active check */}
+        {isActive ? (
           <View
-            style={[styles.activeDot, { backgroundColor: themeOption.accentColor }]}
+            style={[styles.checkWrap, { borderColor: themeOption.accentColor }]}
+          >
+            <Text style={[styles.checkMark, { color: themeOption.accentColor }]}>
+              ✓
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[styles.inactiveCircle, { borderColor: currentTheme.accentColor + '20' }]}
           />
         )}
       </TouchableOpacity>
@@ -133,57 +167,65 @@ function ThemeRow({ themeOption, isActive, onPress, delay }: ThemeRowProps) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
+  safe:   { flex: 1 },
   scroll: { flex: 1 },
   content: {
-    paddingHorizontal: 24,
-    paddingTop: 48,
-    paddingBottom: 24,
-    gap: 40,
+    paddingHorizontal: 28,
+    paddingTop: 24,
+    paddingBottom: 28,
+    gap: 28,
   },
-  header: { gap: 8 },
-  title: {
-    fontSize: 42,
-    fontWeight: '200',
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
+  header:   { gap: 12 },
+  title:    { ...TYPE.TITLE },
+  rule:     { width: 32, height: 1.5, borderRadius: 1 },
+  subtitle: { ...TYPE.BODY, letterSpacing: 1.5, fontWeight: '300' },
+  hint: {
+    fontSize: 12,
     fontWeight: '300',
-    letterSpacing: 1,
+    letterSpacing: 0.3,
+    marginTop: -4,
   },
-  list: { gap: 12 },
+  list: { gap: 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 22,
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.03)',
     gap: 16,
   },
-  swatch: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+  swatchWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
-  rowInfo: {
-    flex: 1,
-    gap: 4,
+  swatchPip: {
+    width: 20,
+    height: 3,
+    borderRadius: 1.5,
+    marginBottom: 8,
+    opacity: 0.9,
   },
-  rowName: {
-    fontSize: 17,
-    fontWeight: '400',
-    letterSpacing: 0.2,
+  info: { flex: 1, gap: 4 },
+  themeName:     { ...TYPE.SUBHEADING },
+  themeSound:    { ...TYPE.CAPTION, letterSpacing: 1, textTransform: 'capitalize' },
+  particleBadge: { fontSize: 10, fontWeight: '300', letterSpacing: 0.5, marginTop: 2 },
+  checkWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  rowSound: {
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'capitalize',
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  checkMark: { fontSize: 12, fontWeight: '700', marginTop: -1 },
+  inactiveCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });
