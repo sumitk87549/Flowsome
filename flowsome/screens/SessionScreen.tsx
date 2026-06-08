@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Alert, BackHandler, Animated 
 import { Screen } from '../components/Screen';
 import { COLORS, SPACING } from '../constants/theme';
 import { SessionConfig, NavigationProps, SessionState } from '../types';
+import { Audio } from 'expo-av';
 
 interface SessionScreenProps extends NavigationProps {
   config: SessionConfig;
@@ -23,9 +24,21 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Animation values for the Living Orb
-  const orbScale = useRef(new Animated.Value(1)).current;
-  const orbOpacity = useRef(new Animated.Value(1)).current;
-  const orbAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1.0)).current;
+  const opacityAnim = useRef(new Animated.Value(0.8)).current;
+  const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Audio Ref
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // Audio Cleanup
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+      }
+    };
+  }, []);
 
   // Timer Engine
   useEffect(() => {
@@ -53,59 +66,100 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
     };
   }, [sessionState]);
 
-  // Orb Animation Engine
+  // Living Orb Motion & State Visuals
   useEffect(() => {
-    if (orbAnimationRef.current) {
-      orbAnimationRef.current.stop();
+    if (pulseRef.current) {
+      pulseRef.current.stop();
     }
 
     if (sessionState === 'RUNNING') {
-      Animated.timing(orbOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-      
-      const breatheIn = Animated.timing(orbScale, {
-        toValue: 1.04,
-        duration: 2500,
+      // Fade orb to fully active
+      Animated.timing(opacityAnim, {
+        toValue: 1.0,
+        duration: 500,
         useNativeDriver: true,
-      });
-      const breatheOut = Animated.timing(orbScale, {
-        toValue: 1,
-        duration: 2500,
-        useNativeDriver: true,
-      });
+      }).start();
 
-      orbAnimationRef.current = Animated.loop(Animated.sequence([breatheIn, breatheOut]));
-      orbAnimationRef.current.start();
-      
+      // Start looping breathing animation (5 second cycle: 2.5s inhale, 2.5s exhale)
+      const breathingAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.04,
+            duration: 2500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1.0,
+            duration: 2500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseRef.current = breathingAnimation;
+      breathingAnimation.start();
+    } else if (sessionState === 'READY') {
+      // Static orb at standard scale/opacity
+      Animated.parallel([
+        Animated.timing(pulseAnim, {
+          toValue: 1.0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0.8,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } else if (sessionState === 'PAUSED') {
+      // Pause: stops breathing, resets scale, dims opacity
       Animated.parallel([
-        Animated.timing(orbScale, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(orbOpacity, { toValue: 0.5, duration: 800, useNativeDriver: true })
+        Animated.timing(pulseAnim, {
+          toValue: 1.0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0.4,
+          duration: 500,
+          useNativeDriver: true,
+        }),
       ]).start();
-      
     } else if (sessionState === 'COMPLETED') {
+      // Completed: stops breathing, resets scale, fades to very soft opacity
       Animated.parallel([
-        Animated.timing(orbScale, { toValue: 1, duration: 1500, useNativeDriver: true }),
-        Animated.timing(orbOpacity, { toValue: 0.2, duration: 1500, useNativeDriver: true })
-      ]).start();
-      
-    } else {
-      // READY or EXITED
-      Animated.parallel([
-        Animated.timing(orbScale, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(orbOpacity, { toValue: 1, duration: 500, useNativeDriver: true })
+        Animated.timing(pulseAnim, {
+          toValue: 1.0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0.2,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
 
     return () => {
-      if (orbAnimationRef.current) {
-        orbAnimationRef.current.stop();
+      if (pulseRef.current) {
+        pulseRef.current.stop();
       }
     };
-  }, [sessionState, orbScale, orbOpacity]);
+  }, [sessionState]);
 
-  const handleStop = () => {
+  const handleStop = async () => {
     console.log('Transition: RUNNING/PAUSED -> EXITED');
     setSessionState('EXITED');
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      } catch (e) {
+        console.log('Audio stop error:', e);
+      }
+    }
     navigate({ name: 'Home' });
   };
 
@@ -135,9 +189,18 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
     return () => backHandler.remove();
   }, [sessionState, navigate]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     console.log('Transition: READY -> RUNNING');
     setSessionState('RUNNING');
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/audio/rain.mp3'),
+        { shouldPlay: true, isLooping: true }
+      );
+      soundRef.current = sound;
+    } catch (e) {
+      console.log('Audio load error:', e);
+    }
   };
 
   const handlePause = () => {
@@ -159,7 +222,7 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
   const renderStateText = () => {
     switch (sessionState) {
       case 'READY': return 'READY TO START';
-      case 'RUNNING': return ''; // Cleaner when running
+      case 'RUNNING': return 'IN PROGRESS';
       case 'PAUSED': return 'PAUSED';
       case 'COMPLETED': return 'SESSION COMPLETE';
       case 'EXITED': return 'SESSION ENDED';
@@ -178,20 +241,28 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
       <View style={styles.content}>
         <Text style={styles.typeText}>{config.type.toUpperCase()}</Text>
 
+        {/* Living Orb Container - structured to support future background themes/particles */}
         <View style={styles.timerContainer}>
-          {/* Base Structure - Ready for future backgrounds/particles */}
-          <View style={styles.orbBackground} />
-          
-          {/* Living Orb */}
-          <Animated.View style={[
-            styles.livingOrb,
-            { 
-              transform: [{ scale: orbScale }],
-              opacity: orbOpacity 
-            }
-          ]} />
-          
-          <Text style={styles.durationText}>{formatTime(remainingSeconds)}</Text>
+          {/* Future Theme Background Placement Layer */}
+          <View style={StyleSheet.absoluteFillObject} />
+
+          {/* Animated Breathing Orb */}
+          <Animated.View
+            style={[
+              styles.orbBase,
+              {
+                opacity: opacityAnim,
+                transform: [{ scale: pulseAnim }],
+              },
+            ]}
+          >
+            <View style={styles.orbInnerAmbient} />
+          </Animated.View>
+
+          {/* Foreground Timer Text */}
+          <View style={styles.foregroundContainer}>
+            <Text style={styles.durationText}>{formatTime(remainingSeconds)}</Text>
+          </View>
         </View>
 
         {config.type === 'Breathing' && config.breathingPattern && (
@@ -288,14 +359,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: SPACING.md,
   },
-  orbBackground: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    // Ready for future theme integration
-  },
-  livingOrb: {
+  orbBase: {
     position: 'absolute',
     width: 280,
     height: 280,
@@ -303,6 +367,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(134, 197, 184, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(134, 197, 184, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  orbInnerAmbient: {
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(134, 197, 184, 0.03)',
+  },
+  foregroundContainer: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   durationText: {
     fontSize: 80,
@@ -323,7 +400,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.accent,
     letterSpacing: 2,
-    marginTop: SPACING.xl,
+    marginTop: SPACING.xxxl,
     opacity: 0.8,
   },
   footer: {
