@@ -21,3 +21,5 @@ export interface NavigationProps {
   navigate: (route: Route) => void;
   goBack: () => void;
 }
+
+export type SessionState = 'READY' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'EXITED';
