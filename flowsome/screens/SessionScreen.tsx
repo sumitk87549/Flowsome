@@ -3,7 +3,6 @@ import { StyleSheet, View, Text, TouchableOpacity, Alert, BackHandler, Animated 
 import { Screen } from '../components/Screen';
 import { COLORS, SPACING } from '../constants/theme';
 import { SessionConfig, NavigationProps, SessionState } from '../types';
-import { Audio } from 'expo-av';
 
 interface SessionScreenProps extends NavigationProps {
   config: SessionConfig;
@@ -11,7 +10,7 @@ interface SessionScreenProps extends NavigationProps {
 
 export function SessionScreen({ config, navigate }: SessionScreenProps) {
   const [sessionState, setSessionState] = useState<SessionState>('READY');
-  
+
   const getInitialSeconds = () => {
     if (config.type === 'Pomodoro' && config.workDuration) {
       return config.workDuration * 60;
@@ -28,17 +27,7 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
   const opacityAnim = useRef(new Animated.Value(0.8)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Audio Ref
-  const soundRef = useRef<Audio.Sound | null>(null);
 
-  // Audio Cleanup
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
-      }
-    };
-  }, []);
 
   // Timer Engine
   useEffect(() => {
@@ -151,15 +140,6 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
   const handleStop = async () => {
     console.log('Transition: RUNNING/PAUSED -> EXITED');
     setSessionState('EXITED');
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      } catch (e) {
-        console.log('Audio stop error:', e);
-      }
-    }
     navigate({ name: 'Home' });
   };
 
@@ -192,15 +172,6 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
   const handleStart = async () => {
     console.log('Transition: READY -> RUNNING');
     setSessionState('RUNNING');
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/audio/rain.mp3'),
-        { shouldPlay: true, isLooping: true }
-      );
-      soundRef.current = sound;
-    } catch (e) {
-      console.log('Audio load error:', e);
-    }
   };
 
   const handlePause = () => {
@@ -268,7 +239,7 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
         {config.type === 'Breathing' && config.breathingPattern && (
           <Text style={styles.detailText}>{config.breathingPattern} Pattern</Text>
         )}
-        
+
         <Text style={styles.stateIndicator}>{renderStateText()}</Text>
       </View>
 
@@ -288,7 +259,7 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
                 <Text style={styles.actionText}>PAUSE</Text>
               </View>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={[styles.actionButton, styles.smallButton]} onPress={handleStop} activeOpacity={0.7}>
               <View style={styles.actionButtonInner}>
                 <Text style={styles.actionText}>STOP</Text>
@@ -304,7 +275,7 @@ export function SessionScreen({ config, navigate }: SessionScreenProps) {
                 <Text style={styles.actionText}>RESUME</Text>
               </View>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={[styles.actionButton, styles.smallButton]} onPress={handleStop} activeOpacity={0.7}>
               <View style={styles.actionButtonInner}>
                 <Text style={styles.actionText}>STOP</Text>
