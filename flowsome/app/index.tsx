@@ -1,118 +1,81 @@
-// app/index.tsx — Sprint 3 test: store + theme switching + persistence
-import { View, Text, TouchableOpacity } from 'react-native';
+// app/index.tsx — Full Home Screen (Sprint 4)
+import { View } from 'react-native';
+import { SafeScreen } from '../components/ui/SafeScreen';
+import { FlowText } from '../components/ui/FlowText';
+import { ThemeSelector } from '../components/home/ThemeSelector';
+import { DayNightToggle } from '../components/home/DayNightToggle';
+import { SessionCard, SESSION_CARDS } from '../components/home/SessionCard';
 import { useTheme, useThemeConfig } from '../hooks/useTheme';
-import { useAppStore } from '../store/appStore';
-import { THEMES, THEME_ORDER } from '../constants/themes';
-import { FONTS, FONT_SIZES } from '../constants/typography';
+import { useSettings } from '../hooks/useSettings';
 
-export default function HomeScreen(): React.JSX.Element {
+export default function HomeScreen() {
   const theme = useTheme();
   const config = useThemeConfig();
-  const { setTheme, activeTheme, setDayNight, dayNight } = useAppStore();
+  const { language } = useSettings();
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        gap: 16,
-      }}
-    >
-      {/* App Title */}
-      <Text
-        style={{
-          fontFamily: FONTS.heading,
-          fontSize: FONT_SIZES['4xl'],
-          color: theme.primary,
-        }}
-      >
-        🌿 FLOWSOME
-      </Text>
-
-      {/* Active theme + mode label */}
-      <Text
-        style={{
-          fontFamily: FONTS.body,
-          fontSize: FONT_SIZES.md,
-          color: theme.textSecondary,
-        }}
-      >
-        {config.icon} {config.name} · {dayNight === 'day' ? '☀️ Day' : '🌙 Night'}
-      </Text>
-
-      {/* Theme Picker Buttons */}
+    <SafeScreen>
+      {/* Header Row */}
       <View
         style={{
           flexDirection: 'row',
-          flexWrap: 'wrap',
-          gap: 8,
-          justifyContent: 'center',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 24,
+          paddingTop: 12,
+          paddingBottom: 4,
         }}
       >
-        {THEME_ORDER.map((id) => (
-          <TouchableOpacity
-            key={id}
-            onPress={() => setTheme(id)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 20,
-              backgroundColor:
-                activeTheme === id ? theme.primary : theme.card,
-              borderWidth: 1,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: FONTS.body,
-                fontSize: FONT_SIZES.sm,
-                color:
-                  activeTheme === id ? theme.background : theme.text,
-              }}
-            >
-              {THEMES[id].icon} {THEMES[id].name}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <View>
+          <FlowText variant="heading" size="2xl" color={theme.primary}>
+            Flowsome
+          </FlowText>
+          <FlowText variant="headingLight" size="sm" color={theme.textMuted}>
+            {language === 'hi-IN' ? config.taglineHindi : config.tagline}
+          </FlowText>
+        </View>
+        <DayNightToggle />
       </View>
 
-      {/* Day / Night Toggle */}
-      <TouchableOpacity
-        onPress={() =>
-          setDayNight(dayNight === 'day' ? 'night' : 'day')
-        }
-        style={{
-          padding: 12,
-          borderRadius: 12,
-          backgroundColor: theme.card,
-          borderWidth: 1,
-          borderColor: theme.cardBorder,
-        }}
-      >
-        <Text
-          style={{ fontFamily: FONTS.body, color: theme.text, fontSize: FONT_SIZES.md }}
-        >
-          Toggle {dayNight === 'day' ? '🌙 Night Mode' : '☀️ Day Mode'}
-        </Text>
-      </TouchableOpacity>
+      {/* Theme Selector Strip */}
+      <ThemeSelector />
 
-      {/* Status Footer */}
-      <Text
-        style={{
-          fontFamily: FONTS.body,
-          fontSize: FONT_SIZES.xs,
-          color: theme.textMuted,
-          textAlign: 'center',
-          marginTop: 8,
-        }}
-      >
-        Sprint 3 · Stores ✅ · Fonts ✅{'\n'}
-        Close and reopen the app → theme should persist
-      </Text>
-    </View>
+      {/* Region Label */}
+      <View style={{ paddingHorizontal: 24, paddingVertical: 16 }}>
+        <FlowText
+          variant="headingItalic"
+          size="lg"
+          color={theme.textSecondary}
+          style={{ textAlign: 'center', lineHeight: 28 }}
+        >
+          {config.name} {config.icon}
+        </FlowText>
+        <FlowText
+          variant="body"
+          size="sm"
+          color={theme.textMuted}
+          style={{ textAlign: 'center', marginTop: 4 }}
+        >
+          {language === 'hi-IN' ? config.nameHindi : config.name}
+        </FlowText>
+      </View>
+
+      {/* Session Cards Grid */}
+      <View style={{ flex: 1, paddingHorizontal: 20 }}>
+        <FlowText
+          variant="label"
+          size="xs"
+          color={theme.textMuted}
+          style={{ marginBottom: 12, letterSpacing: 2, textTransform: 'uppercase' }}
+        >
+          Choose Your Practice
+        </FlowText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {SESSION_CARDS.map((card) => (
+            <SessionCard key={card.id} data={card} />
+          ))}
+        </View>
+      </View>
+    </SafeScreen>
   );
 }

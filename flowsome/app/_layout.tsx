@@ -1,4 +1,4 @@
-// app/_layout.tsx
+// app/_layout.tsx — Root Layout (Sprint 4 version)
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -10,11 +10,10 @@ import { FONTS } from '../constants/typography';
 import { useAppStore } from '../store/appStore';
 import { THEMES } from '../constants/themes';
 
-// ─── CRITICAL: Must be called at module level, NOT inside the component ───────
+// Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
-// ─────────────────────────────────────────────────────────────────────────────
 
-export default function RootLayout(): React.JSX.Element | null {
+export default function RootLayout() {
   const { activeTheme, dayNight } = useAppStore();
   const theme =
     dayNight === 'day'
@@ -22,11 +21,11 @@ export default function RootLayout(): React.JSX.Element | null {
       : THEMES[activeTheme].nightColors;
 
   const [fontsLoaded, fontError] = useFonts({
-    [FONTS.heading]:      require('../assets/fonts/CormorantGaramond-SemiBold.ttf'),
+    [FONTS.heading]: require('../assets/fonts/CormorantGaramond-SemiBold.ttf'),
     [FONTS.headingLight]: require('../assets/fonts/CormorantGaramond-Light.ttf'),
-    [FONTS.headingItalic]:require('../assets/fonts/CormorantGaramond-Italic.ttf'),
-    [FONTS.body]:         require('../assets/fonts/DMSans-Regular.ttf'),
-    [FONTS.bodyMedium]:   require('../assets/fonts/DMSans-Medium.ttf'),
+    [FONTS.headingItalic]: require('../assets/fonts/CormorantGaramond-Italic.ttf'),
+    [FONTS.body]: require('../assets/fonts/DMSans-Regular.ttf'),
+    [FONTS.bodyMedium]: require('../assets/fonts/DMSans-Medium.ttf'),
     [FONTS.bodySemiBold]: require('../assets/fonts/DMSans-SemiBold.ttf'),
   });
 
@@ -36,7 +35,6 @@ export default function RootLayout(): React.JSX.Element | null {
     }
   }, [fontsLoaded, fontError]);
 
-  // Return null while fonts load — splash screen stays visible
   if (!fontsLoaded && !fontError) {
     return null;
   }
