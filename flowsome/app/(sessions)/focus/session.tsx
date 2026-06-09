@@ -16,6 +16,7 @@ import { useTheme } from '../../../hooks/useTheme';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { FOCUS_MODES } from '../../../constants/focus-modes';
 import { formatTime } from '../../../utils/timeUtils';
+import { HapticUtils } from '../../../utils/hapticUtils';
 
 export default function FocusSession() {
   const router = useRouter();
@@ -32,7 +33,9 @@ export default function FocusSession() {
     workMinutes: workMin,
     breakMinutes: 0,
     totalPomodoros: 1,
-    onAllComplete: () => {},
+    onAllComplete: () => {
+      HapticUtils.success();
+    },
   });
 
   useAmbientAudio(activeTheme, true);
@@ -50,7 +53,7 @@ export default function FocusSession() {
 
   useEffect(() => {
     if (status === 'complete') {
-      const t = setTimeout(() => router.back(), 3000);
+      const t = setTimeout(() => router.replace('/' as any), 3000);
       return () => clearTimeout(t);
     }
   }, [status]);

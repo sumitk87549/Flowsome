@@ -1,5 +1,8 @@
 // app/index.tsx — Sprint 6 (adds ParticleCanvas as background layer)
-import { View } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { HapticUtils } from '../utils/hapticUtils';
 import { SafeScreen } from '../components/ui/SafeScreen';
 import { FlowText } from '../components/ui/FlowText';
 import { ThemeSelector } from '../components/home/ThemeSelector';
@@ -11,6 +14,7 @@ import { AudioManager } from '../components/audio/AudioManager';
 import { ParticleCanvas } from '../components/particles/ParticleCanvas';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const theme = useTheme();
   const config = useThemeConfig();
   const { language } = useSettings();
@@ -29,7 +33,15 @@ export default function HomeScreen() {
             {language === 'hi-IN' ? config.taglineHindi : config.tagline}
           </FlowText>
         </View>
-        <DayNightToggle />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity
+            onPress={() => { HapticUtils.light(); router.push('/settings/' as any); }}
+            style={{ padding: 4 }}
+          >
+            <Ionicons name="settings-outline" size={22} color={theme.textMuted} />
+          </TouchableOpacity>
+          <DayNightToggle />
+        </View>
       </View>
       {/* ── Theme Selector Strip ─────────────────────────────────────── */}
       <ThemeSelector />
@@ -43,7 +55,7 @@ export default function HomeScreen() {
         </FlowText>
       </View>
       {/* ── Session Cards Grid ───────────────────────────────────────── */}
-      <View style={{ flex: 1, paddingHorizontal: 20 }}>
+      <View style={{ flex: 1, paddingHorizontal: 20, paddingBottom: 24 }}>
         <FlowText variant="label" size="xs" color={theme.textMuted} style={{ marginBottom: 12, letterSpacing: 2, textTransform: 'uppercase' }}>
           Choose Your Practice
         </FlowText>

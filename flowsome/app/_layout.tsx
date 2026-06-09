@@ -6,8 +6,11 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as SystemUI from 'expo-system-ui';
+import * as Localization from 'expo-localization';
 import { FONTS } from '../constants/typography';
 import { useAppStore } from '../store/appStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { THEMES } from '../constants/themes';
 
 // Keep splash screen visible while fonts load
@@ -35,6 +38,24 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  // ── Effect 1: Sync Android navigation bar color to active theme ──────────────
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(theme.background);
+  }, [theme.background]);
+
+  // ── Effect 2: Auto-detect device language on very first launch ───────────────
+  useEffect(() => {
+    // Only auto-set if user has never manually changed the language (still at default 'en-IN')
+    const storedLang = useSettingsStore.getState().language;
+    if (storedLang === 'en-IN') {
+      const locales = Localization.getLocales();
+      const deviceLang = locales[0]?.languageCode;
+      if (deviceLang === 'hi') {
+        useSettingsStore.getState().setLanguage('hi-IN');
+      }
+    }
+  }, []); // Empty deps — runs once on app launch
+
   if (!fontsLoaded && !fontError) {
     return null;
   }
@@ -42,7 +63,8 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <StatusBar style="light" />
+        {/* @ts-ignore */}
+        <StatusBar style="light" backgroundColor={theme.background} translucent={false} />
         <Stack
           screenOptions={{
             headerShown: false,

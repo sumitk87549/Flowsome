@@ -16,6 +16,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useTheme } from '../../../hooks/useTheme';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { formatTime } from '../../../utils/timeUtils';
+import { HapticUtils } from '../../../utils/hapticUtils';
 
 export default function MeditationSession() {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function MeditationSession() {
     totalPomodoros: 1,
     onAllComplete: () => {
       playSingingBowl();
+      HapticUtils.success();
     },
   });
 
@@ -58,7 +60,7 @@ export default function MeditationSession() {
 
   useEffect(() => {
     if (status === 'complete') {
-      const t = setTimeout(() => router.back(), 4000);
+      const t = setTimeout(() => router.replace('/' as any), 4000);
       return () => clearTimeout(t);
     }
   }, [status]);

@@ -14,6 +14,7 @@ import { useAmbientAudio, useBinauralAudio, useSFX } from '../../../hooks/useAud
 import { useAppStore } from '../../../store/appStore';
 import { useTheme } from '../../../hooks/useTheme';
 import { useSettingsStore } from '../../../store/settingsStore';
+import { HapticUtils } from '../../../utils/hapticUtils';
 
 export default function PomodoroSession() {
   const router = useRouter();
@@ -50,6 +51,7 @@ export default function PomodoroSession() {
     },
     onAllComplete: () => {
       playSingingBowl();
+      HapticUtils.success();
     },
   });
 
@@ -77,7 +79,7 @@ export default function PomodoroSession() {
   useEffect(() => {
     if (status === 'complete') {
       const t = setTimeout(() => {
-        router.back();
+        router.replace('/' as any);
       }, 4000);
       return () => clearTimeout(t);
     }

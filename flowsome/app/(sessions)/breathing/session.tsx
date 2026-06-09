@@ -15,6 +15,7 @@ import { BREATHING_PATTERNS } from '../../../constants/breathing-patterns';
 import { useAmbientAudio } from '../../../hooks/useAudio';
 import { useAppStore } from '../../../store/appStore';
 import { useSettingsStore } from '../../../store/settingsStore';
+import { HapticUtils } from '../../../utils/hapticUtils';
 
 export default function BreathingSession() {
   const router = useRouter();
@@ -60,7 +61,8 @@ export default function BreathingSession() {
   // Navigate back automatically after session completes
   useEffect(() => {
     if (state === 'complete') {
-      const timer = setTimeout(() => router.back(), 3000);
+      HapticUtils.success();
+      const timer = setTimeout(() => router.replace('/' as any), 3000);
       return () => clearTimeout(timer);
     }
   }, [state, router]);
