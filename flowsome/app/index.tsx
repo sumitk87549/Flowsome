@@ -1,197 +1,118 @@
-// app/index.tsx — Sprint 2 test screen: confirms fonts and theme constants load correctly
-import { View, Text, ScrollView } from 'react-native';
-import { useFonts } from 'expo-font';
-import { FONTS, FONT_SIZES } from '../constants/typography';
+// app/index.tsx — Sprint 3 test: store + theme switching + persistence
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useTheme, useThemeConfig } from '../hooks/useTheme';
+import { useAppStore } from '../store/appStore';
 import { THEMES, THEME_ORDER } from '../constants/themes';
-import { BREATHING_PATTERNS } from '../constants/breathing-patterns';
-import { MEDITATION_TYPES } from '../constants/meditation-types';
-import { FOCUS_MODES } from '../constants/focus-modes';
+import { FONTS, FONT_SIZES } from '../constants/typography';
 
 export default function HomeScreen(): React.JSX.Element {
-  const [fontsLoaded] = useFonts({
-    [FONTS.heading]: require('../assets/fonts/CormorantGaramond-SemiBold.ttf'),
-    [FONTS.headingLight]: require('../assets/fonts/CormorantGaramond-Light.ttf'),
-    [FONTS.headingItalic]: require('../assets/fonts/CormorantGaramond-Italic.ttf'),
-    [FONTS.body]: require('../assets/fonts/DMSans-Regular.ttf'),
-    [FONTS.bodyMedium]: require('../assets/fonts/DMSans-Medium.ttf'),
-    [FONTS.bodySemiBold]: require('../assets/fonts/DMSans-SemiBold.ttf'),
-  });
-
-  const theme = THEMES.rajasthan;
-  const colors = theme.dayColors;
+  const theme = useTheme();
+  const config = useThemeConfig();
+  const { setTheme, activeTheme, setDayNight, dayNight } = useAppStore();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 24, paddingTop: 60 }}
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: theme.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        gap: 16,
+      }}
     >
-      {/* Title */}
+      {/* App Title */}
       <Text
         style={{
-          fontFamily: fontsLoaded ? FONTS.heading : undefined,
+          fontFamily: FONTS.heading,
           fontSize: FONT_SIZES['4xl'],
-          color: colors.primary,
-          marginBottom: 4,
+          color: theme.primary,
         }}
       >
         🌿 FLOWSOME
       </Text>
 
-      {/* Font status */}
+      {/* Active theme + mode label */}
       <Text
         style={{
-          fontFamily: fontsLoaded ? FONTS.body : undefined,
+          fontFamily: FONTS.body,
           fontSize: FONT_SIZES.md,
-          color: fontsLoaded ? '#4ADE80' : colors.textMuted,
-          marginBottom: 24,
+          color: theme.textSecondary,
         }}
       >
-        {fontsLoaded ? 'Fonts: ✅ Loaded (6/6)' : 'Fonts: ⏳ Loading...'}
+        {config.icon} {config.name} · {dayNight === 'day' ? '☀️ Day' : '🌙 Night'}
       </Text>
 
-      {/* Themes */}
-      <Text
+      {/* Theme Picker Buttons */}
+      <View
         style={{
-          fontFamily: fontsLoaded ? FONTS.bodyMedium : undefined,
-          fontSize: FONT_SIZES.sm,
-          color: colors.textMuted,
-          letterSpacing: 2,
-          marginBottom: 8,
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 8,
+          justifyContent: 'center',
         }}
       >
-        THEMES ({THEME_ORDER.length})
-      </Text>
-      {THEME_ORDER.map((id) => {
-        const t = THEMES[id];
-        return (
-          <View
+        {THEME_ORDER.map((id) => (
+          <TouchableOpacity
             key={id}
+            onPress={() => setTheme(id)}
             style={{
-              backgroundColor: t.dayColors.card,
-              borderColor: t.dayColors.cardBorder,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 20,
+              backgroundColor:
+                activeTheme === id ? theme.primary : theme.card,
               borderWidth: 1,
-              borderRadius: 8,
-              padding: 10,
-              marginBottom: 6,
+              borderColor: theme.cardBorder,
             }}
           >
             <Text
               style={{
-                fontFamily: fontsLoaded ? FONTS.bodyMedium : undefined,
-                fontSize: FONT_SIZES.md,
-                color: t.dayColors.primary,
+                fontFamily: FONTS.body,
+                fontSize: FONT_SIZES.sm,
+                color:
+                  activeTheme === id ? theme.background : theme.text,
               }}
             >
-              {t.icon} {t.name} — {t.nameHindi}
+              {THEMES[id].icon} {THEMES[id].name}
             </Text>
-            <Text
-              style={{
-                fontFamily: fontsLoaded ? FONTS.body : undefined,
-                fontSize: FONT_SIZES.xs,
-                color: t.dayColors.textMuted,
-                marginTop: 2,
-              }}
-            >
-              {t.tagline}
-            </Text>
-          </View>
-        );
-      })}
+          </TouchableOpacity>
+        ))}
+      </View>
 
-      {/* Breathing Patterns */}
-      <Text
+      {/* Day / Night Toggle */}
+      <TouchableOpacity
+        onPress={() =>
+          setDayNight(dayNight === 'day' ? 'night' : 'day')
+        }
         style={{
-          fontFamily: fontsLoaded ? FONTS.bodyMedium : undefined,
-          fontSize: FONT_SIZES.sm,
-          color: colors.textMuted,
-          letterSpacing: 2,
-          marginTop: 16,
-          marginBottom: 8,
+          padding: 12,
+          borderRadius: 12,
+          backgroundColor: theme.card,
+          borderWidth: 1,
+          borderColor: theme.cardBorder,
         }}
       >
-        BREATHING PATTERNS ({BREATHING_PATTERNS.length})
-      </Text>
-      {BREATHING_PATTERNS.map((p) => (
         <Text
-          key={p.id}
-          style={{
-            fontFamily: fontsLoaded ? FONTS.body : undefined,
-            fontSize: FONT_SIZES.sm,
-            color: colors.textSecondary,
-            marginBottom: 4,
-          }}
+          style={{ fontFamily: FONTS.body, color: theme.text, fontSize: FONT_SIZES.md }}
         >
-          • {p.name} — {p.phases.length} phases · {p.cycles} cycles
+          Toggle {dayNight === 'day' ? '🌙 Night Mode' : '☀️ Day Mode'}
         </Text>
-      ))}
+      </TouchableOpacity>
 
-      {/* Meditation Types */}
+      {/* Status Footer */}
       <Text
         style={{
-          fontFamily: fontsLoaded ? FONTS.bodyMedium : undefined,
-          fontSize: FONT_SIZES.sm,
-          color: colors.textMuted,
-          letterSpacing: 2,
-          marginTop: 16,
-          marginBottom: 8,
-        }}
-      >
-        MEDITATION TYPES ({MEDITATION_TYPES.length})
-      </Text>
-      {MEDITATION_TYPES.map((m) => (
-        <Text
-          key={m.id}
-          style={{
-            fontFamily: fontsLoaded ? FONTS.body : undefined,
-            fontSize: FONT_SIZES.sm,
-            color: colors.textSecondary,
-            marginBottom: 4,
-          }}
-        >
-          • {m.name} — {m.durationMinutes.join(', ')} min
-        </Text>
-      ))}
-
-      {/* Focus Modes */}
-      <Text
-        style={{
-          fontFamily: fontsLoaded ? FONTS.bodyMedium : undefined,
-          fontSize: FONT_SIZES.sm,
-          color: colors.textMuted,
-          letterSpacing: 2,
-          marginTop: 16,
-          marginBottom: 8,
-        }}
-      >
-        FOCUS MODES ({FOCUS_MODES.length})
-      </Text>
-      {FOCUS_MODES.map((f) => (
-        <Text
-          key={f.id}
-          style={{
-            fontFamily: fontsLoaded ? FONTS.body : undefined,
-            fontSize: FONT_SIZES.sm,
-            color: colors.textSecondary,
-            marginBottom: 4,
-          }}
-        >
-          • {f.name} — {f.defaultWorkMinutes}m work / {f.defaultBreakMinutes}m break
-        </Text>
-      ))}
-
-      {/* Sprint badge */}
-      <Text
-        style={{
-          fontFamily: fontsLoaded ? FONTS.headingItalic : undefined,
-          fontSize: FONT_SIZES.sm,
-          color: colors.textMuted,
-          marginTop: 32,
-          marginBottom: 24,
+          fontFamily: FONTS.body,
+          fontSize: FONT_SIZES.xs,
+          color: theme.textMuted,
           textAlign: 'center',
+          marginTop: 8,
         }}
       >
-        Sprint 2 — Constants & Font Foundation ✅
+        Sprint 3 · Stores ✅ · Fonts ✅{'\n'}
+        Close and reopen the app → theme should persist
       </Text>
-    </ScrollView>
+    </View>
   );
 }
