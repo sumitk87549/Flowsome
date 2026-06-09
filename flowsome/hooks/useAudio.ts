@@ -38,9 +38,6 @@ export function useAmbientAudio(theme: string, autoPlay: boolean = true) {
     if (autoPlay) {
       player.play();
     }
-    return () => {
-      player.pause();
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme, autoPlay]);
 
@@ -65,9 +62,6 @@ export function useBinauralAudio(mode: 'alpha' | 'theta' | 'delta', autoPlay: bo
     if (autoPlay) {
       player.play();
     }
-    return () => {
-      player.pause();
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, autoPlay]);
 
