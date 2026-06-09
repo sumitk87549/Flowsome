@@ -1,18 +1,52 @@
 {
   "expo": {
-    "scheme": "skia",
-    "web": {
-      "output": "static"
+    "name": "Flowsome",
+    "slug": "flowsome",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "sdkVersion": "56.0.0",
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.yourname.flowsome",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-audio",
-      "expo-status-bar",
-      "expo-splash-screen",
-      "expo-localization"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "backgroundColor": "#1a1a2e"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Flowsome to access your microphone."
+        }
+      ],
+      "expo-asset"
     ],
-    "name": "flowsome",
-    "slug": "flowsome"
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5b8fdc0e-a280-4cf0-9006-911586c4f796"
+      }
+    }
   }
 }

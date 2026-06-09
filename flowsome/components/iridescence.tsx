@@ -71,7 +71,7 @@ export default function Iridescence({
   return (
     <Canvas style={{ flex: 1 }}>
       <Fill>
-        <Shader source={source} uniforms={uniforms} />
+        <Shader source={source!} uniforms={uniforms} />
       </Fill>
     </Canvas>
   );

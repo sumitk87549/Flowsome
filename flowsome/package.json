@@ -1,21 +1,25 @@
 {
   "name": "flowsome",
   "main": "expo-router/entry",
+  "trustedDependencies": [
+    "@shopify/react-native-skia"
+  ],
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "postinstall": "node copy-canvaskit.js",
-    "deploy": "npx expo export -p web && npx eas-cli@latest deploy"
+    "android": "expo run:android",
+    "build:dev": "eas build --platform android --profile development",
+    "build:apk": "eas build --platform android --profile preview",
+    "build:aab": "eas build --platform android --profile production"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@shopify/react-native-skia": "2.6.2",
     "expo": "^56.0.4",
+    "expo-asset": "~56.0.16",
     "expo-audio": "~56.0.11",
     "expo-blur": "~56.0.3",
+    "expo-constants": "~56.0.17",
     "expo-font": "~56.0.5",
     "expo-haptics": "~56.0.3",
     "expo-keep-awake": "~56.0.3",
