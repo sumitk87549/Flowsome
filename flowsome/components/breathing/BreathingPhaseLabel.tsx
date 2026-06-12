@@ -1,44 +1,61 @@
 // components/breathing/BreathingPhaseLabel.tsx
-import { View } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { FlowText } from '../ui/FlowText';
-import { BreathingPhase } from '../../constants/breathing-patterns';
-import { useTheme } from '../../hooks/useTheme';
+import React from 'react';
+import { View, Text } from 'react-native';
 import { useSettings } from '../../hooks/useSettings';
 
-interface BreathingPhaseLabelProps {
-  phase: BreathingPhase;
+const PHASE_TEXT: Record<string, { en: string; hi: string }> = {
+  inhale:  { en: 'Inhale',  hi: 'श्वास लें' },
+  holdIn:  { en: 'Hold',    hi: 'रोकें'    },
+  exhale:  { en: 'Exhale',  hi: 'छोड़ें'    },
+  holdOut: { en: 'Rest',    hi: 'विश्राम'  },
+  idle:    { en: 'Ready',   hi: 'तैयार'    },
+};
+
+export interface BreathingPhaseLabelProps {
+  phase: string;
   secondsRemaining: number;
+  theme: { text: string; textMuted: string };
 }
 
-export function BreathingPhaseLabel({
-  phase,
-  secondsRemaining,
-}: BreathingPhaseLabelProps) {
-  const theme = useTheme();
+export function BreathingPhaseLabel({ phase, secondsRemaining, theme }: BreathingPhaseLabelProps) {
   const { language } = useSettings();
-
-  const labelText = language === 'hi-IN' ? phase.nameHindi : phase.nameEnglish;
+  const phaseData = PHASE_TEXT[phase] || PHASE_TEXT.idle;
 
   return (
-    <View style={{ alignItems: 'center', gap: 4 }}>
-      <Animated.View
-        key={phase.name}
-        entering={FadeIn.duration(300)}
-        exiting={FadeOut.duration(200)}
+    <View style={{ alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 80 }}>
+      <Text
+        style={{
+          fontSize: 120,
+          opacity: 0.10,
+          position: 'absolute',
+          fontFamily: 'CormorantGaramond-Light',
+          color: theme.text,
+        }}
       >
-        <FlowText
-          variant="heading"
-          size="3xl"
-          color={theme.primary}
-          style={{ textAlign: 'center', letterSpacing: 2 }}
-        >
-          {labelText}
-        </FlowText>
-      </Animated.View>
-      <FlowText variant="body" size="2xl" color={theme.textSecondary}>
         {Math.ceil(secondsRemaining)}
-      </FlowText>
+      </Text>
+      <Text
+        style={{
+          fontSize: 36,
+          letterSpacing: 4,
+          textTransform: 'uppercase',
+          fontFamily: 'CormorantGaramond-Medium',
+          color: theme.text,
+        }}
+      >
+        {phaseData.en}
+      </Text>
+      <Text
+        style={{
+          fontSize: 16,
+          marginTop: 4,
+          opacity: 0.7,
+          fontFamily: 'DMSans-Regular',
+          color: theme.textMuted,
+        }}
+      >
+        {phaseData.hi}
+      </Text>
     </View>
   );
 }

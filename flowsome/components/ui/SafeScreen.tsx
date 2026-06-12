@@ -1,9 +1,10 @@
 // components/ui/SafeScreen.tsx
-import { View, ViewProps } from 'react-native';
+import { View, ViewProps, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, useThemeConfig } from '../../hooks/useTheme';
 import { useAppStore } from '../../store/appStore';
+import { THEME_IMAGES } from '../../constants/theme-images';
 
 interface SafeScreenProps extends ViewProps {
   withGradient?: boolean;
@@ -22,15 +23,25 @@ export function SafeScreen({
 
   if (withGradient) {
     return (
-      <LinearGradient
-        colors={[colors.gradientStart + '40', colors.gradientEnd, colors.background]}
-        locations={[0, 0.4, 1]}
+      <ImageBackground
+        source={THEME_IMAGES[config.id]}
         style={{ flex: 1 }}
+        resizeMode="cover"
       >
-        <SafeAreaView style={[{ flex: 1 }, style]} {...props}>
-          {children}
-        </SafeAreaView>
-      </LinearGradient>
+        <LinearGradient
+          colors={[
+            colors.gradientStart + '20', // soft top visibility
+            colors.background + 'B0',     // beautiful center gradient blending
+            colors.background,           // solid bottom readability
+          ]}
+          locations={[0, 0.45, 0.85]}
+          style={{ flex: 1 }}
+        >
+          <SafeAreaView style={[{ flex: 1 }, style]} {...props}>
+            {children}
+          </SafeAreaView>
+        </LinearGradient>
+      </ImageBackground>
     );
   }
 
@@ -42,3 +53,4 @@ export function SafeScreen({
     </View>
   );
 }
+

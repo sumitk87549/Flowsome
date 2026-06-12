@@ -1,8 +1,9 @@
 // app/(sessions)/pomodoro/session.tsx
-import { View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useEffect, useState } from 'react';
 import * as KeepAwake from 'expo-keep-awake';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withRepeat, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { SafeScreen } from '../../../components/ui/SafeScreen';
 import { CircularTimer } from '../../../components/timer/CircularTimer';
 import { TimeDisplay } from '../../../components/timer/TimeDisplay';
@@ -13,28 +14,92 @@ import { useTimer } from '../../../hooks/useTimer';
 import { useAmbientAudio, useBinauralAudio, useSFX } from '../../../hooks/useAudio';
 import { useAppStore } from '../../../store/appStore';
 import { useTheme } from '../../../hooks/useTheme';
+import { useSessionStore } from '../../../store/sessionStore';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { HapticUtils } from '../../../utils/hapticUtils';
+import { QUOTES } from '../../../constants/quotes';
+
+function PomodoroDot({ completed, active, theme }: { completed: boolean; active: boolean; theme: any }) {
+  const scale = useSharedValue(1);
+  const breathe = useSharedValue(1);
+
+  useEffect(() => {
+    if (completed) {
+      scale.value = withSpring(1.3, { damping: 5 }, () => {
+        scale.value = withSpring(1.0);
+      });
+    }
+  }, [completed]);
+
+  useEffect(() => {
+    if (active) {
+      breathe.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 2000 }),
+          withTiming(1.0,  { duration: 2000 }),
+        ),
+        -1, false,
+      );
+    } else {
+      cancelAnimation(breathe);
+      breathe.value = withTiming(1.0, { duration: 200 });
+    }
+    return () => cancelAnimation(breathe);
+  }, [active]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value * breathe.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        animStyle,
+        {
+          width: 12, height: 12, borderRadius: 6,
+          backgroundColor: completed
+            ? theme.primary
+            : active ? theme.primaryLight : theme.cardBorder,
+          shadowColor: completed ? theme.primary : 'transparent',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: completed ? 0.8 : 0,
+          shadowRadius: 6,
+          elevation: completed ? 4 : 0,
+        },
+      ]}
+    />
+  );
+}
+
+// Ensure formatTime function is available for TimeDisplay manual usage or write it
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
 
 export default function PomodoroSession() {
   const router = useRouter();
+  const navigation = useNavigation();
   const theme = useTheme();
   const { activeTheme } = useAppStore();
-  const { keepAwakeEnabled } = useSettingsStore();
+  const { keepAwakeEnabled, language } = useSettingsStore();
   const params = useLocalSearchParams<{ workMin: string; breakMin: string; count: string }>();
 
   const workMin = parseInt(params.workMin ?? '25', 10);
   const breakMin = parseInt(params.breakMin ?? '5', 10);
   const count = parseInt(params.count ?? '4', 10);
 
+  const totalWorkSeconds = workMin * 60;
+  const intention = useSessionStore((s) => s.intention);
   const { playDing, playSingingBowl } = useSFX();
 
   const {
     status,
-    phase,
+    phase: timerPhase,
     secondsLeft,
     completedPomodoros,
-    progress,
+    progressShared,
     start,
     pause,
     resume,
@@ -55,12 +120,15 @@ export default function PomodoroSession() {
     },
   });
 
+  const themeQuotes = QUOTES[activeTheme] || QUOTES['rajasthan'];
+  const activeQuote = themeQuotes[0];
+
   useAmbientAudio(activeTheme, true);
-  useBinauralAudio('alpha', status === 'running' && phase === 'work');
+  useBinauralAudio('alpha', status === 'running' && timerPhase === 'work');
 
   useEffect(() => {
     if (keepAwakeEnabled) {
-      KeepAwake.activateKeepAwakeAsync();
+      KeepAwake.activateKeepAwakeAsync().catch(() => {});
     }
     return () => {
       KeepAwake.deactivateKeepAwake();
@@ -68,7 +136,6 @@ export default function PomodoroSession() {
   }, [keepAwakeEnabled]);
 
   useEffect(() => {
-    // Auto-start the timer 500ms after mount (gives audio time to initialize)
     const t = setTimeout(() => {
       start();
     }, 500);
@@ -85,9 +152,56 @@ export default function PomodoroSession() {
     }
   }, [status]);
 
+  // Flow State logic
+  const [flowEntered, setFlowEntered] = useState(false);
+  const [showFlowBanner, setShowFlowBanner] = useState(false);
+  const bannerOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (status === 'running' && timerPhase === 'work') {
+      const elapsed = totalWorkSeconds - secondsLeft;
+      if (elapsed >= 600 && !flowEntered) {
+        setFlowEntered(true);
+        setShowFlowBanner(true);
+        HapticUtils.heavy();
+        bannerOpacity.value = withSequence(
+          withTiming(1, { duration: 400 }),
+          withTiming(1, { duration: 2200 }),
+          withTiming(0, { duration: 400 }),
+        );
+        setTimeout(() => setShowFlowBanner(false), 3000);
+      }
+    }
+  }, [secondsLeft, status, timerPhase, flowEntered, totalWorkSeconds, bannerOpacity]);
+
+  // Exit Ritual logic
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+      if (status === 'running') {
+        e.preventDefault();
+        setShowExitConfirm(true);
+      }
+    });
+    return unsubscribe;
+  }, [navigation, status]);
+
   return (
     <SafeScreen>
       <ParticleCanvas />
+      
+      {showFlowBanner && (
+        <Animated.View
+          style={[styles.flowBanner, useAnimatedStyle(() => ({ opacity: bannerOpacity.value }))]}
+          pointerEvents="none"
+        >
+          <Text style={[styles.flowBannerText, { color: theme.text, fontFamily: 'CormorantGaramond-Italic' }]}>
+            Flow state entered 🌊
+          </Text>
+        </Animated.View>
+      )}
+
       <View
         style={{
           flex: 1,
@@ -96,31 +210,52 @@ export default function PomodoroSession() {
           paddingVertical: 60,
         }}
       >
-        {/* Top label */}
-        <FlowText variant="heading" size="xl" color={theme.textMuted}>
-          {status === 'complete'
-            ? '✅ Session Complete!'
-            : `${completedPomodoros + 1} of ${count}`}
-        </FlowText>
-
-        {/* Circular timer with time display centered inside */}
-        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-          <CircularTimer
-            progress={progress}
-            size={280}
-            isBreak={phase === 'break'}
-          />
-          <View style={{ position: 'absolute' }}>
-            <TimeDisplay
-              secondsLeft={secondsLeft}
-              phase={phase}
-              completedPomodoros={completedPomodoros}
-              totalPomodoros={count}
-            />
+        <View style={{ alignItems: 'center', width: '100%', gap: 8, paddingHorizontal: 24 }}>
+          <FlowText variant="heading" size="xl" color={theme.textMuted}>
+            {status === 'complete'
+              ? (language === 'hi-IN' ? '✅ सत्र पूर्ण!' : '✅ Session Complete!')
+              : `${completedPomodoros + 1} of ${count}`}
+          </FlowText>
+          {status !== 'complete' && (
+            <FlowText size="xs" color={theme.textMuted} style={{ textAlign: 'center', fontStyle: 'italic', marginTop: 4, lineHeight: 18, opacity: 0.85 }}>
+              "{language === 'hi-IN' ? activeQuote.textHindi : activeQuote.text}"
+            </FlowText>
+          )}
+          <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+            {Array(count).fill(0).map((_, i) => (
+              <PomodoroDot
+                key={i}
+                completed={i < completedPomodoros}
+                active={i === completedPomodoros && status === 'running'}
+                theme={theme}
+              />
+            ))}
           </View>
         </View>
 
-        {/* Controls */}
+        <View style={styles.timerContainer}>
+          {intention ? (
+            <Text
+              style={[styles.intentionWatermark, { color: theme.text, fontFamily: 'CormorantGaramond-Italic' }]}
+              numberOfLines={3}
+            >
+              {intention}
+            </Text>
+          ) : null}
+
+          <View style={styles.timerWrapper}>
+            <CircularTimer progress={progressShared} size={240} theme={theme} isBreak={timerPhase === 'break'} />
+            <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+              <Text style={[styles.timeText, { color: theme.text, fontFamily: 'CormorantGaramond-Medium' }]}>
+                {formatTime(secondsLeft)}
+              </Text>
+              <Text style={[styles.phaseLabel, { color: theme.textMuted }]}>
+                {timerPhase === 'work' ? 'Focus' : 'Break'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         <View style={{ gap: 12, width: '80%', alignItems: 'center' }}>
           {status === 'running' && (
             <FlowButton
@@ -141,13 +276,121 @@ export default function PomodoroSession() {
             label="End Session"
             variant="ghost"
             onPress={() => {
-              stop();
-              router.back();
+              if (status === 'running') {
+                setShowExitConfirm(true);
+              } else {
+                stop();
+                router.back();
+              }
             }}
             style={{ width: '100%', alignItems: 'center' }}
           />
         </View>
       </View>
+
+      {showExitConfirm && (
+        <View style={[StyleSheet.absoluteFill, styles.exitOverlay]}>
+          <Text style={[styles.exitTitle, { color: theme.text, fontFamily: 'CormorantGaramond-Medium' }]}>
+            {Math.floor((totalWorkSeconds - secondsLeft) / 60)} minutes of deep focus is rare and valuable.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.stayBtn, { backgroundColor: theme.primary }]}
+            onPress={() => setShowExitConfirm(false)}
+          >
+            <Text style={[styles.stayBtnText, { color: theme.background }]}>
+              Stay in flow
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.endBtn}
+            onPress={() => {
+              setShowExitConfirm(false);
+              stop();
+              router.replace('/');
+            }}
+          >
+            <Text style={[styles.endBtnText, { color: theme.textMuted }]}>
+              Yes, end session
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  flowBanner: {
+    position: 'absolute',
+    top: 60,
+    left: 0, right: 0,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  flowBannerText: {
+    fontSize: 18,
+    letterSpacing: 1,
+    opacity: 0.9,
+  },
+  timerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  intentionWatermark: {
+    position: 'absolute',
+    fontSize: 22,
+    opacity: 0.08,
+    textAlign: 'center',
+    width: 260,
+    zIndex: 0,
+    lineHeight: 30,
+  },
+  timerWrapper: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  timeText: {
+    fontSize: 42,
+    letterSpacing: 2,
+  },
+  phaseLabel: {
+    fontSize: 13,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  exitOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    zIndex: 200,
+  },
+  exitTitle: {
+    fontSize: 22,
+    textAlign: 'center',
+    lineHeight: 30,
+    marginBottom: 40,
+  },
+  stayBtn: {
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '80%',
+    alignItems: 'center',
+  },
+  stayBtnText: {
+    fontSize: 18,
+    fontFamily: 'DMSans-Medium',
+  },
+  endBtn: {
+    padding: 12,
+  },
+  endBtnText: {
+    fontSize: 14,
+  },
+});

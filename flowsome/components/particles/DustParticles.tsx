@@ -1,88 +1,130 @@
 // components/particles/DustParticles.tsx
-import { useEffect } from 'react';
-import { Dimensions } from 'react-native';
-import { Circle } from '@shopify/react-native-skia';
+import React, { memo, useMemo, useEffect } from 'react';
+import { Canvas, Circle } from '@shopify/react-native-skia';
 import {
   useSharedValue,
   useDerivedValue,
   withRepeat,
   withTiming,
-  Easing,
-  SharedValue,
+  cancelAnimation,
 } from 'react-native-reanimated';
-import { useAppStore } from '../../store/appStore';
-import { THEMES } from '../../constants/themes';
 
-const { width, height } = Dimensions.get('window');
-const PARTICLE_COUNT = 35;
-
-interface Particle {
-  x: number;
-  y: number;
-  r: number;
-  speed: number;
-  drift: number;
-  phase: number;
+interface ParticleProps {
+  width: number;
+  height: number;
+  theme: any; // ThemeColors from useTheme()
+  breathPhase?: string;
 }
 
-// Generated once at module load — random but stable per app session
-const particles: Particle[] = Array.from({ length: PARTICLE_COUNT }, () => ({
-  x: Math.random() * width,
-  y: Math.random() * height,
-  r: Math.random() * 2.5 + 0.8,
-  speed: Math.random() * 0.4 + 0.1,
-  drift: (Math.random() - 0.5) * 0.3,
-  phase: Math.random() * Math.PI * 2,
-}));
+interface DustSeed {
+  startX: number;
+  startY: number;
+  radius: number;
+  driftAmpX: number;   // horizontal oscillation amplitude (px)
+  driftAmpY: number;   // vertical oscillation amplitude (px)
+  driftSpeedX: number; // animation cycle duration (ms, 4000–12000)
+  driftSpeedY: number; // vertical oscillation frequency multiplier
+  baseOpacity: number;
+}
 
-// ─── Sub-component: hooks are at top level here, NOT in a .map() ──────────────
-interface DustParticleItemProps {
-  particle: Particle;
-  t: SharedValue<number>;
+// ─────────────────────────────────────────────────────────────
+// SINGLE PARTICLE — owns its own hooks at the top level.
+// Never call useSharedValue/useDerivedValue in the parent.
+// ─────────────────────────────────────────────────────────────
+const DustParticle = memo(function DustParticle({
+  seed,
+  color,
+  breathPhase,
+}: {
+  seed: DustSeed;
   color: string;
-}
+  breathPhase?: string;
+}) {
+  // t cycles from (seed.startX * 100) to 1000 and repeats.
+  // The starting offset gives each particle a different initial phase,
+  // which creates visual variety without calling hooks differently per particle.
+  const t = useSharedValue(seed.startX * 100);
 
-function DustParticleItem({ particle: p, t, color }: DustParticleItemProps) {
-  const cx = useDerivedValue(() => {
-    const progress = (t.value + p.phase / (Math.PI * 2)) % 1;
-    const rawX = p.x + p.drift * progress * width * 2;
-    return ((rawX % (width + 20)) + (width + 20)) % (width + 20) - 10;
-  });
-
-  const cy = useDerivedValue(() => {
-    const progress = (t.value + p.phase / (Math.PI * 2)) % 1;
-    const rawY = p.y - progress * p.speed * height * 1.5;
-    return ((rawY % (height + 20)) + (height + 20)) % (height + 20);
-  });
-
-  const opacity = useDerivedValue(() => {
-    return 0.2 + 0.4 * Math.abs(Math.sin(t.value * Math.PI * 2 + p.phase));
-  });
-
-  return <Circle cx={cx} cy={cy} r={p.r} color={color} opacity={opacity} />;
-}
-
-// ─── Parent: creates shared clock, renders sub-components ────────────────────
-export function DustParticles() {
-  const { activeTheme, dayNight } = useAppStore();
-  const colors = dayNight === 'day'
-    ? THEMES[activeTheme].dayColors
-    : THEMES[activeTheme].nightColors;
-  const t = useSharedValue(0);
-
+  // Use standard React useEffect — NOT useReanimatedEffect.
+  // cancelAnimation on cleanup prevents memory leaks when component unmounts.
   useEffect(() => {
     t.value = withRepeat(
-      withTiming(1, { duration: 12000, easing: Easing.linear }),
-      -1,
-      false,
+      withTiming(1000, { duration: seed.driftSpeedX }),
+      -1,   // infinite loops
+      false, // do not reverse (restart from beginning each time)
     );
-  }, []);
+    return () => {
+      cancelAnimation(t);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // cx — horizontal position (figure-8 orbital drift + breath response)
+  const cx = useDerivedValue(() => {
+    const phase = (t.value % 1000) / 1000; // 0.0 → 1.0 cycle
+    let breathOffset = 0;
+    if (breathPhase === 'inhale') breathOffset = -8 * Math.sin(phase * Math.PI);
+    if (breathPhase === 'exhale') breathOffset = 8 * Math.sin(phase * Math.PI);
+    return seed.startX + seed.driftAmpX * Math.sin(phase * Math.PI * 2) + breathOffset;
+  });
+
+  // cy — vertical position (sinusoidal drift)
+  const cy = useDerivedValue(() => {
+    const phase = (t.value % 1000) / 1000;
+    return seed.startY + seed.driftAmpY * Math.cos(phase * Math.PI * 2 * seed.driftSpeedY);
+  });
+
+  // opacity — gently pulses in time with movement
+  const opacity = useDerivedValue(() => {
+    const phase = (t.value % 1000) / 1000;
+    return seed.baseOpacity * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2));
+  });
 
   return (
-    <>
-      {particles.map((p, i) => (
-        <DustParticleItem key={i} particle={p} t={t} color={colors.particle} />
+    <Circle cx={cx} cy={cy} r={seed.radius} color={color} opacity={opacity} />
+  );
+});
+
+// ─────────────────────────────────────────────────────────────
+// PARENT — generates seeds, renders N DustParticle components.
+// Does NOT call useSharedValue here. Seeds are plain JS objects.
+// ─────────────────────────────────────────────────────────────
+export default function DustParticles({
+  width,
+  height,
+  theme,
+  breathPhase,
+}: ParticleProps) {
+  const PARTICLE_COUNT = 35;
+
+  const seeds: DustSeed[] = useMemo(
+    () =>
+      Array(PARTICLE_COUNT)
+        .fill(0)
+        .map(() => ({
+          startX:      Math.random() * width,
+          startY:      Math.random() * height,
+          radius:      1 + Math.random() * 2.5,
+          driftAmpX:   20 + Math.random() * 40,
+          driftAmpY:   15 + Math.random() * 30,
+          driftSpeedX: 4000 + Math.random() * 8000, // 4–12 seconds per cycle
+          driftSpeedY: 0.3 + Math.random() * 0.7,
+          baseOpacity: 0.15 + Math.random() * 0.35,
+        })),
+    [width, height],
+  );
+
+  if (width === 0) return null;
+
+  return (
+    <Canvas style={{ width, height }}>
+      {seeds.map((seed, i) => (
+        <DustParticle
+          key={i}
+          seed={seed}
+          color={theme.particle}
+          breathPhase={breathPhase}
+        />
       ))}
-    </>
+    </Canvas>
   );
 }

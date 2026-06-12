@@ -1,12 +1,13 @@
 // app/settings/index.tsx
-import { View, Switch, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Switch, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeScreen } from '../../components/ui/SafeScreen';
 import { FlowText } from '../../components/ui/FlowText';
 import { FlowCard } from '../../components/ui/FlowCard';
-import { useTheme } from '../../hooks/useTheme';
+import { useTheme, useThemeConfig } from '../../hooks/useTheme';
 import { useSettingsStore, Language } from '../../store/settingsStore';
+import { THEME_IMAGES } from '../../constants/theme-images';
 import { HapticUtils } from '../../utils/hapticUtils';
 
 function VolumeSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
@@ -53,6 +54,7 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
 
 export default function Settings() {
   const theme = useTheme();
+  const config = useThemeConfig();
   const router = useRouter();
   const {
     language, setLanguage,
@@ -171,12 +173,15 @@ export default function Settings() {
           >
             About
           </FlowText>
-          <FlowCard style={{ padding: 16, gap: 4 }}>
-            <FlowText variant="heading" size="xl" color={theme.primary}>Flowsome</FlowText>
-            <FlowText size="sm" color={theme.textMuted}>Version 1.0.0 · Expo SDK 56</FlowText>
-            <FlowText size="xs" color={theme.textMuted} style={{ marginTop: 8 }}>
-              Wellness & productivity with Indian identity. Five regions. Four sessions. One practice.
-            </FlowText>
+          <FlowCard style={{ padding: 0, overflow: 'hidden', borderWidth: 1, borderColor: theme.cardBorder }}>
+            <Image source={THEME_IMAGES[config.id]} style={{ width: '100%', height: 110 }} resizeMode="cover" />
+            <View style={{ padding: 16, gap: 4 }}>
+              <FlowText variant="heading" size="xl" color={theme.primary}>Flowsome</FlowText>
+              <FlowText size="sm" color={theme.textMuted}>Version 1.0.0 · Expo SDK 56</FlowText>
+              <FlowText size="xs" color={theme.textMuted} style={{ marginTop: 8, lineHeight: 16 }}>
+                Wellness & productivity with Indian identity. Five regions. Four sessions. One practice.
+              </FlowText>
+            </View>
           </FlowCard>
 
         </ScrollView>
@@ -184,3 +189,4 @@ export default function Settings() {
     </SafeScreen>
   );
 }
+

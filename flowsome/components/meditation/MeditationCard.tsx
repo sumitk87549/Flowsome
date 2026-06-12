@@ -27,13 +27,6 @@ export function MeditationCard({ type, isSelected, onSelect }: MeditationCardPro
             <FlowText variant="heading" size="xl" color={isSelected ? theme.primary : theme.text}>{type.name}</FlowText>
             <FlowText size="xs" color={theme.textMuted}>{type.nameHindi}</FlowText>
           </View>
-          <View style={{ alignItems: 'flex-end', gap: 3 }}>
-            {type.durationMinutes.map(d => (
-              <View key={d} style={{ backgroundColor: theme.card, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                <FlowText size="xs" color={theme.textMuted}>{d}m</FlowText>
-              </View>
-            ))}
-          </View>
         </View>
         <FlowText size="sm" color={theme.textSecondary}>{type.description}</FlowText>
       </FlowCard>

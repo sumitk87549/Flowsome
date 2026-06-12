@@ -1,117 +1,72 @@
 // components/breathing/BreathingOrb.tsx
-import { useState, useEffect } from 'react';
-import { View, Dimensions } from 'react-native';
-import { Canvas, Circle, RadialGradient, vec } from '@shopify/react-native-skia';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  Easing,
-} from 'react-native-reanimated';
-import { BreathingPhase } from '../../constants/breathing-patterns';
-import { useAppStore } from '../../store/appStore';
-import { THEMES } from '../../constants/themes';
+import React from 'react';
+import { View } from 'react-native';
+import { Canvas, Circle } from '@shopify/react-native-skia';
+import { useDerivedValue } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
 
-const { width } = Dimensions.get('window');
-const ORB_MAX_SIZE = width * 0.65;
-const ORB_MIN_SIZE = width * 0.35;
-const CANVAS_SIZE = ORB_MAX_SIZE + 80;
-
-interface BreathingOrbProps {
-  phase: BreathingPhase;
-  progress: number; // 0 → 1 within current phase
+export interface BreathingOrbProps {
+  phase: 'inhale' | 'holdIn' | 'exhale' | 'holdOut' | 'idle';
+  phaseProgress: SharedValue<number>;
+  theme: any;
+  size?: number;
 }
 
-export function BreathingOrb({ phase, progress: _progress }: BreathingOrbProps) {
-  const [ready, setReady] = useState(false);
-  const { activeTheme, dayNight } = useAppStore();
-  const colors =
-    dayNight === 'day'
-      ? THEMES[activeTheme].dayColors
-      : THEMES[activeTheme].nightColors;
+export function BreathingOrb({ phase, phaseProgress, theme, size = 220 }: BreathingOrbProps) {
+  const minRadius = size * 0.22;
+  const maxRadius = size * 0.42;
+  const glowExtra = size * 0.12;
+  const cx = size / 2;
+  const cy = size / 2;
 
-  const scale = useSharedValue(0.6);
-  const glowOpacity = useSharedValue(0.3);
+  // Orb radius
+  const orbRadius = useDerivedValue(() => {
+    if (phase === 'inhale') return minRadius + (maxRadius - minRadius) * phaseProgress.value;
+    if (phase === 'exhale') return maxRadius - (maxRadius - minRadius) * phaseProgress.value;
+    if (phase === 'holdIn') return maxRadius;
+    return minRadius; // holdOut, idle
+  });
 
-  useEffect(() => {
-    const phaseName = phase.name;
-    if (phaseName === 'inhale') {
-      scale.value = withTiming(1.0, {
-        duration: phase.durationSeconds * 1000,
-        easing: Easing.bezier(0.4, 0, 0.2, 1),
-      });
-      glowOpacity.value = withTiming(0.7, {
-        duration: phase.durationSeconds * 1000,
-      });
-    } else if (phaseName === 'exhale') {
-      scale.value = withTiming(0.6, {
-        duration: phase.durationSeconds * 1000,
-        easing: Easing.bezier(0.4, 0, 0.2, 1),
-      });
-      glowOpacity.value = withTiming(0.2, {
-        duration: phase.durationSeconds * 1000,
-      });
-    } else {
-      // holdIn or holdOut — gentle spring to current position
-      scale.value = withSpring(phaseName === 'holdIn' ? 1.0 : 0.6, {
-        damping: 30,
-        stiffness: 60,
-      });
+  // Glow ring radius
+  const glowRadius = useDerivedValue(() => {
+    if (phase === 'inhale') {
+      const advancedProgress = Math.min(1, phaseProgress.value + 0.15);
+      const advOrb = minRadius + (maxRadius - minRadius) * advancedProgress;
+      return advOrb + glowExtra;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase.name]);
+    if (phase === 'exhale') {
+      const lagProgress = Math.max(0, phaseProgress.value - 0.15);
+      const lagOrb = maxRadius - (maxRadius - minRadius) * lagProgress;
+      return lagOrb + glowExtra;
+    }
+    return orbRadius.value + glowExtra;
+  });
 
-  const animatedOrbStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: 0.9,
-  }));
+  // Glow ring opacity
+  const glowOpacity = useDerivedValue(() => {
+    if (phase === 'holdIn') return 0.25 + 0.2 * Math.sin(phaseProgress.value * Math.PI * 3);
+    if (phase === 'holdOut') return 0.12;
+    if (phase === 'inhale') return 0.15 + phaseProgress.value * 0.25;
+    if (phase === 'exhale') return 0.4 - phaseProgress.value * 0.2;
+    return 0.15;
+  });
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-    transform: [{ scale: scale.value * 1.4 }],
-  }));
-
-  const orbR = CANVAS_SIZE / 2 - 10;
+  // Center color (inner orb color)
+  const centerColorString = useDerivedValue(() => {
+    if (phase === 'inhale') return theme.orbInhale;
+    if (phase === 'holdIn') return theme.orbHold;
+    if (phase === 'exhale' || phase === 'holdOut') return theme.orbExhale;
+    return theme.orb;
+  });
 
   return (
-    <View
-      style={{
-        width: CANVAS_SIZE,
-        height: CANVAS_SIZE,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onLayout={() => setReady(true)}
-    >
-      {/* Glow ring */}
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            width: ORB_MAX_SIZE + 60,
-            height: ORB_MAX_SIZE + 60,
-            borderRadius: (ORB_MAX_SIZE + 60) / 2,
-            backgroundColor: colors.orbGlow,
-          },
-          glowStyle,
-        ]}
-      />
-
-      {/* Orb — Skia Canvas with layout guard */}
-      <Animated.View style={[{ position: 'absolute' }, animatedOrbStyle]}>
-        {ready && (
-          <Canvas style={{ width: CANVAS_SIZE, height: CANVAS_SIZE }}>
-            <Circle cx={CANVAS_SIZE / 2} cy={CANVAS_SIZE / 2} r={orbR}>
-              <RadialGradient
-                c={vec(CANVAS_SIZE / 2, CANVAS_SIZE / 2)}
-                r={orbR}
-                colors={[colors.primaryLight, colors.orb, colors.gradientEnd]}
-              />
-            </Circle>
-          </Canvas>
-        )}
-      </Animated.View>
+    <View style={{ width: size, height: size }}>
+      <Canvas style={{ width: size, height: size }}>
+        <Circle cx={cx} cy={cy} r={glowRadius} color={theme.orbGlow} opacity={glowOpacity} />
+        {/* Use two overlapping circles instead of RadialGradient as the fallback pattern */}
+        <Circle cx={cx} cy={cy} r={orbRadius} color={theme.orb} />
+        <Circle cx={cx} cy={cy} r={orbRadius} color={centerColorString} opacity={0.75} />
+      </Canvas>
     </View>
   );
 }

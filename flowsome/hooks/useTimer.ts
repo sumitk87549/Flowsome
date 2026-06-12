@@ -1,5 +1,6 @@
 // hooks/useTimer.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSharedValue, cancelAnimation } from 'react-native-reanimated';
 import { HapticUtils } from '../utils/hapticUtils';
 
 export type TimerPhase = 'work' | 'break' | 'idle';
@@ -21,6 +22,8 @@ export function useTimer(options: UseTimerOptions) {
   const [phase, setPhase] = useState<TimerPhase>('idle');
   const [secondsLeft, setSecondsLeft] = useState(workMinutes * 60);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
+
+  const progressShared = useSharedValue(0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -71,6 +74,7 @@ export function useTimer(options: UseTimerOptions) {
     intervalRef.current = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
+          progressShared.value = 1;
           if (phase === 'work') {
             HapticUtils.success();
             onWorkComplete?.();
@@ -90,6 +94,9 @@ export function useTimer(options: UseTimerOptions) {
           }
           return 0;
         }
+        
+        const newProgress = 1 - (prev - 1) / totalSeconds;
+        progressShared.value = newProgress;
         return prev - 1;
       });
     }, 1000);
@@ -106,6 +113,7 @@ export function useTimer(options: UseTimerOptions) {
     completedPomodoros,
     totalPomodoros,
     progress,
+    progressShared,
     start,
     pause,
     resume,

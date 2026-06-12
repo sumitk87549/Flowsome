@@ -1,85 +1,104 @@
 // components/particles/RainParticles.tsx
-import { useEffect } from 'react';
-import { Dimensions } from 'react-native';
-import { Rect } from '@shopify/react-native-skia';
+import React, { memo, useMemo, useEffect } from 'react';
+import { Canvas, Circle } from '@shopify/react-native-skia';
 import {
   useSharedValue,
   useDerivedValue,
   withRepeat,
   withTiming,
+  cancelAnimation,
   Easing,
-  SharedValue,
 } from 'react-native-reanimated';
-import { useAppStore } from '../../store/appStore';
-import { THEMES } from '../../constants/themes';
 
-const { width, height } = Dimensions.get('window');
-const DROP_COUNT = 60;
+interface ParticleProps {
+  width: number;
+  height: number;
+  theme: any;
+  breathPhase?: string;
+}
 
-interface RainDrop {
-  x: number;
-  startY: number;
-  length: number;
-  speed: number;
+interface RainSeed {
+  startX: number;
+  initialOffset: number; // 0 to height — stagger: 0 enters first, height enters last
+  radius: number;
+  fallDuration: number;  // ms per full screen fall (350–950 = fast rain)
+  diagonalFactor: number; // total horizontal drift over full height (px)
   opacity: number;
 }
 
-const drops: RainDrop[] = Array.from({ length: DROP_COUNT }, () => ({
-  x: Math.random() * width,
-  startY: Math.random() * height,
-  length: Math.random() * 18 + 10,
-  speed: Math.random() * 0.8 + 0.5,
-  opacity: Math.random() * 0.3 + 0.1,
-}));
-
-// ─── Sub-component ────────────────────────────────────────────────────────────
-interface RainDropItemProps {
-  drop: RainDrop;
-  t: SharedValue<number>;
+const RainDrop = memo(function RainDrop({
+  seed,
+  color,
+  height,
+}: {
+  seed: RainSeed;
   color: string;
-}
-
-function RainDropItem({ drop: d, t, color }: RainDropItemProps) {
-  const y = useDerivedValue(() => {
-    const rawY = d.startY + t.value * d.speed * (height + d.length) * 2;
-    return (
-      ((rawY % (height + d.length)) + (height + d.length)) % (height + d.length) - d.length
-    );
-  });
-
-  return (
-    <Rect
-      x={d.x}
-      y={y}
-      width={1}
-      height={d.length}
-      color={color}
-      opacity={d.opacity}
-    />
-  );
-}
-
-// ─── Parent ───────────────────────────────────────────────────────────────────
-export function RainParticles() {
-  const { activeTheme, dayNight } = useAppStore();
-  const colors = dayNight === 'day'
-    ? THEMES[activeTheme].dayColors
-    : THEMES[activeTheme].nightColors;
-  const t = useSharedValue(0);
+  height: number;
+}) {
+  // Starts above screen at -initialOffset, falls to height+20, repeats.
+  const t = useSharedValue(-seed.initialOffset);
 
   useEffect(() => {
     t.value = withRepeat(
-      withTiming(1, { duration: 5000, easing: Easing.linear }),
+      withTiming(height + 20, {
+        duration: seed.fallDuration,
+        easing: Easing.linear,
+      }),
       -1,
       false,
     );
-  }, []);
+    return () => cancelAnimation(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // cy — direct Y position
+  const cy = useDerivedValue(() => t.value);
+
+  // cx — subtle diagonal drift as drop falls (simulates wind)
+  const cx = useDerivedValue(() => {
+    const progress = Math.max(0, t.value) / height; // 0.0 → 1.0 while visible
+    return seed.startX + progress * seed.diagonalFactor;
+  });
 
   return (
-    <>
-      {drops.map((d, i) => (
-        <RainDropItem key={i} drop={d} t={t} color={colors.particle} />
+    <Circle cx={cx} cy={cy} r={seed.radius} color={color} opacity={seed.opacity} />
+  );
+});
+
+export default function RainParticles({
+  width,
+  height,
+  theme,
+  breathPhase,
+}: ParticleProps) {
+  const PARTICLE_COUNT = 55;
+
+  const seeds: RainSeed[] = useMemo(
+    () =>
+      Array(PARTICLE_COUNT)
+        .fill(0)
+        .map(() => ({
+          startX:         Math.random() * width,
+          initialOffset:  Math.random() * height, // stagger: 0 to full height above screen
+          radius:         0.8 + Math.random() * 1.2,
+          fallDuration:   350 + Math.random() * 600, // fast: 350–950 ms
+          diagonalFactor: 8 + Math.random() * 22,   // total horizontal drift (px)
+          opacity:        0.35 + Math.random() * 0.45,
+        })),
+    [width, height],
+  );
+
+  if (width === 0) return null;
+
+  return (
+    <Canvas style={{ width, height }}>
+      {seeds.map((seed, i) => (
+        <RainDrop
+          key={i}
+          seed={seed}
+          color={theme.particle}
+          height={height}
+        />
       ))}
-    </>
+    </Canvas>
   );
 }

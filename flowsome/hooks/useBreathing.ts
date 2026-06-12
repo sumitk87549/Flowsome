@@ -1,5 +1,6 @@
 // hooks/useBreathing.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSharedValue, cancelAnimation } from 'react-native-reanimated';
 import { BreathingPattern, BreathingPhase as BreathingPhaseObject } from '../constants/breathing-patterns';
 import { useSessionStore } from '../store/sessionStore';
 import { useSpeech } from './useSpeech';
@@ -14,6 +15,7 @@ export interface UseBreathingReturn {
   state: BreathingState;
   currentPhase: BreathingPhaseObject;
   phaseProgress: number;          // 0 → 1 within current phase
+  phaseProgressShared: any;
   currentCycle: number;
   phaseSecondsRemaining: number;
   start: () => void;
@@ -27,6 +29,8 @@ export function useBreathing(pattern: BreathingPattern): UseBreathingReturn {
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [cycle, setCycle] = useState(0);
   const [phaseElapsed, setPhaseElapsed] = useState(0);
+
+  const phaseProgressShared = useSharedValue(0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { speakCue } = useSpeech();
@@ -85,9 +89,11 @@ export function useBreathing(pattern: BreathingPattern): UseBreathingReturn {
           }
         }, 0);
 
+        phaseProgressShared.value = 0;
         return 0;
       }
 
+      phaseProgressShared.value = Math.min(next / phaseDuration, 1);
       return next;
     });
   }, [phaseIndex, cycle, activePhaseDefs, pattern.cycles, storeSetCycle, speakCue, speakPhase, setBreathingPhase]);
@@ -130,6 +136,7 @@ export function useBreathing(pattern: BreathingPattern): UseBreathingReturn {
     state,
     currentPhase: currentPhaseDef ?? pattern.phases[0],
     phaseProgress,
+    phaseProgressShared,
     currentCycle: cycle,
     phaseSecondsRemaining: Math.max(
       0,

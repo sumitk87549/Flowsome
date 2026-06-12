@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SystemUI from 'expo-system-ui';
 import * as Localization from 'expo-localization';
+import { NavigationBar } from 'expo-navigation-bar';
 import { FONTS } from '../constants/typography';
 import { useAppStore } from '../store/appStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -38,7 +39,7 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // ── Effect 1: Sync Android navigation bar color to active theme ──────────────
+  // ── Effect 1: Sync Android window root background color ────────
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(theme.background);
   }, [theme.background]);
@@ -63,8 +64,8 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        {/* @ts-ignore */}
-        <StatusBar style="light" backgroundColor={theme.background} translucent={false} />
+        <StatusBar style={dayNight === 'day' ? 'dark' : 'light'} />
+        <NavigationBar style={dayNight === 'day' ? 'dark' : 'light'} />
         <Stack
           screenOptions={{
             headerShown: false,
@@ -75,3 +76,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+

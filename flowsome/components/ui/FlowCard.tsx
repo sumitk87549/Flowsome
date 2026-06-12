@@ -11,7 +11,7 @@ interface FlowCardProps extends ViewProps {
 export function FlowCard({
   children,
   style,
-  intensity = 20,
+  intensity = 45,
   useBlur = true,
   ...props
 }: FlowCardProps) {
