@@ -1,4 +1,4 @@
-// components/particles/SnowParticles.tsx
+// components/particles/SnowParticles.tsx — Sprint 13: Variety + sinusoidal sway
 import React, { memo, useMemo, useEffect } from 'react';
 import { Canvas, Circle } from '@shopify/react-native-skia';
 import {
@@ -19,11 +19,11 @@ interface ParticleProps {
 
 interface SnowSeed {
   startX: number;
-  initialOffset: number; // how far above screen to start (20 to height px)
+  initialOffset: number;
   radius: number;
-  fallDuration: number;  // ms to fall from top to bottom (7000–15000 = slow, dreamy)
-  swayAmpX: number;      // horizontal sway amplitude (px)
-  swayFreq: number;      // sway cycles during one full fall
+  fallDuration: number;
+  swayAmpX: number;
+  swayFreq: number;
   opacity: number;
 }
 
@@ -31,14 +31,13 @@ const SnowFlake = memo(function SnowFlake({
   seed,
   color,
   height,
+  breathPhase,
 }: {
   seed: SnowSeed;
   color: string;
   height: number;
+  breathPhase?: string;
 }) {
-  // t starts above the screen (negative y) and falls to below the screen (height + 40).
-  // withRepeat restarts from the same initial value, so flake always enters from
-  // the same point above the screen. Different initialOffsets create stagger.
   const t = useSharedValue(-seed.initialOffset);
 
   useEffect(() => {
@@ -53,20 +52,26 @@ const SnowFlake = memo(function SnowFlake({
     return () => cancelAnimation(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // cy — directly maps t to Y position (above screen → below screen)
   const cy = useDerivedValue(() => t.value);
 
-  // cx — gentle sinusoidal sway as the flake falls
+  // Sinusoidal sway + breath reaction
   const cx = useDerivedValue(() => {
     const totalRange = height + 40 + seed.initialOffset;
-    const progress = (t.value + seed.initialOffset) / totalRange; // 0.0 → 1.0
-    return seed.startX + seed.swayAmpX * Math.sin(progress * Math.PI * 2 * seed.swayFreq);
+    const progress = (t.value + seed.initialOffset) / totalRange;
+    // True sinusoidal oscillation instead of linear
+    const sway = seed.swayAmpX * Math.sin(progress * Math.PI * 2 * seed.swayFreq);
+    // On inhale, drift inward toward center
+    let breathOffset = 0;
+    if (breathPhase === 'inhale') {
+      const centerX = seed.startX > 200 ? -6 : 6; // drift toward center
+      breathOffset = centerX * Math.sin(progress * Math.PI);
+    }
+    return seed.startX + sway + breathOffset;
   });
 
-  // opacity — fade in at top edge, fade out at bottom edge, full in middle
   const opacity = useDerivedValue(() => {
-    if (t.value < 30)             return seed.opacity * Math.max(0, (t.value + 30) / 60);
-    if (t.value > height - 30)   return seed.opacity * Math.max(0, (height + 40 - t.value) / 70);
+    if (t.value < 30)           return seed.opacity * Math.max(0, (t.value + 30) / 60);
+    if (t.value > height - 30) return seed.opacity * Math.max(0, (height + 40 - t.value) / 70);
     return seed.opacity;
   });
 
@@ -79,21 +84,25 @@ export default function SnowParticles({
   theme,
   breathPhase,
 }: ParticleProps) {
-  const PARTICLE_COUNT = 28;
+  const PARTICLE_COUNT = 50; // increased from 28
 
   const seeds: SnowSeed[] = useMemo(
     () =>
       Array(PARTICLE_COUNT)
         .fill(0)
-        .map(() => ({
-          startX:        Math.random() * width,
-          initialOffset: 20 + Math.random() * height, // stagger: 20 to height px above screen
-          radius:        2 + Math.random() * 3,
-          fallDuration:  7000 + Math.random() * 8000,  // slow: 7–15 seconds
-          swayAmpX:      12 + Math.random() * 25,
-          swayFreq:      0.5 + Math.random() * 1.5,
-          opacity:       0.5 + Math.random() * 0.4,
-        })),
+        .map(() => {
+          // Large flakes drift slowly, small ones fall fast
+          const isLarge = Math.random() < 0.3;
+          return {
+            startX:        Math.random() * width,
+            initialOffset: 20 + Math.random() * height,
+            radius:        isLarge ? (3 + Math.random() * 2) : (1 + Math.random() * 1.5),
+            fallDuration:  isLarge ? (10000 + Math.random() * 8000) : (5000 + Math.random() * 5000),
+            swayAmpX:      isLarge ? (18 + Math.random() * 25) : (8 + Math.random() * 15),
+            swayFreq:      0.5 + Math.random() * 1.5,
+            opacity:       isLarge ? (0.5 + Math.random() * 0.35) : (0.3 + Math.random() * 0.4),
+          };
+        }),
     [width, height],
   );
 
@@ -107,6 +116,7 @@ export default function SnowParticles({
           seed={seed}
           color={theme.particle}
           height={height}
+          breathPhase={breathPhase}
         />
       ))}
     </Canvas>

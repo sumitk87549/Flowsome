@@ -1,14 +1,15 @@
-// components/home/ThemeSelector.tsx
-import { ScrollView, TouchableOpacity, ImageBackground, View } from 'react-native';
+// components/home/ThemeSelector.tsx — Compact landscape thumbnails
+import { useRef, useEffect } from 'react';
+import { ScrollView, TouchableOpacity, ImageBackground, View, Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { useEffect } from 'react';
+import ReAnimated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { FlowText } from '../ui/FlowText';
 import { useTheme } from '../../hooks/useTheme';
 import { useAppStore } from '../../store/appStore';
 import { THEMES, THEME_ORDER, ThemeId } from '../../constants/themes';
 import { THEME_IMAGES } from '../../constants/theme-images';
 import { HapticUtils } from '../../utils/hapticUtils';
+import { useSFX } from '../../hooks/useAudio';
 
 interface ThemeCardProps {
   id: ThemeId;
@@ -19,91 +20,94 @@ interface ThemeCardProps {
 function ThemeCard({ id, isActive, onPress }: ThemeCardProps) {
   const config = THEMES[id];
   const theme = useTheme();
-  const scale = useSharedValue(isActive ? 1.04 : 0.96);
+  const scale = useSharedValue(isActive ? 1.02 : 0.97);
+  const pressScale = useRef(new RNAnimated.Value(1)).current;
 
   useEffect(() => {
-    scale.value = withSpring(isActive ? 1.04 : 0.96, { damping: 15, stiffness: 100 });
+    scale.value = withSpring(isActive ? 1.02 : 0.97, { damping: 14, stiffness: 100 });
   }, [isActive]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
+  const handlePressIn = () => {
+    RNAnimated.spring(pressScale, { toValue: 0.95, useNativeDriver: true, damping: 15, stiffness: 200 }).start();
+  };
+  const handlePressOut = () => {
+    RNAnimated.spring(pressScale, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 180 }).start();
+  };
+
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.9}
-      style={{ marginHorizontal: 6, paddingVertical: 12 }}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+      style={{ marginHorizontal: 5, paddingVertical: 6 }}
     >
-      <Animated.View
-        style={[
-          animatedStyle,
-          {
-            width: 135,
-            height: 190,
-            borderRadius: 20,
-            overflow: 'hidden',
-            borderWidth: 2.5,
-            borderColor: isActive ? theme.primary : 'transparent',
-            backgroundColor: theme.card,
-            shadowColor: theme.primary,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: isActive ? 0.4 : 0,
-            shadowRadius: 10,
-            elevation: isActive ? 5 : 0,
-          }
-        ]}
-      >
-        <ImageBackground
-          source={THEME_IMAGES[id]}
-          style={{ width: '100%', height: '100%', justifyContent: 'flex-end' }}
-          resizeMode="cover"
+      <RNAnimated.View style={{ transform: [{ scale: pressScale }] }}>
+        <ReAnimated.View
+          style={[
+            animatedStyle,
+            {
+              width: 110,
+              height: 80,
+              borderRadius: 14,
+              overflow: 'hidden',
+              borderWidth: isActive ? 2 : 1,
+              borderColor: isActive ? theme.primary : 'rgba(255,255,255,0.08)',
+              backgroundColor: theme.card,
+              opacity: isActive ? 1 : 0.55,
+              // Subtle glow for selected
+              shadowColor: isActive ? theme.primary : 'transparent',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isActive ? 0.4 : 0,
+              shadowRadius: 8,
+              elevation: isActive ? 4 : 0,
+            }
+          ]}
         >
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.85)']}
-            style={{
-              padding: 12,
-              paddingBottom: 16,
-              height: '70%',
-              justifyContent: 'flex-end',
-            }}
+          <ImageBackground
+            source={THEME_IMAGES[id]}
+            style={{ width: '100%', height: '100%', justifyContent: 'flex-end' }}
+            resizeMode="cover"
           >
-            <FlowText
-              variant="heading"
-              size="lg"
-              color="#FFFFFF"
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.85)']}
               style={{
-                textShadowColor: 'rgba(0, 0, 0, 0.6)',
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 3,
+                paddingHorizontal: 10,
+                paddingBottom: 8,
+                paddingTop: 20,
               }}
             >
-              {config.icon} {config.name}
-            </FlowText>
-            <FlowText
-              size="xs"
-              color="rgba(255, 255, 255, 0.8)"
-              style={{
-                marginTop: 2,
-                textShadowColor: 'rgba(0, 0, 0, 0.6)',
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 2,
-              }}
-            >
-              {config.nameHindi}
-            </FlowText>
-          </LinearGradient>
-        </ImageBackground>
-      </Animated.View>
+              <FlowText
+                variant="heading"
+                size="sm"
+                color="#FFFFFF"
+                style={{
+                  textShadowColor: 'rgba(0,0,0,0.8)',
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 3,
+                }}
+              >
+                {config.name}
+              </FlowText>
+            </LinearGradient>
+          </ImageBackground>
+        </ReAnimated.View>
+      </RNAnimated.View>
     </TouchableOpacity>
   );
 }
 
 export function ThemeSelector() {
   const { activeTheme, setTheme } = useAppStore();
+  const { playRegionSelect } = useSFX();
 
   const handleThemeSelect = (id: ThemeId) => {
     HapticUtils.medium();
+    playRegionSelect();
     setTheme(id);
   };
 
@@ -111,9 +115,9 @@ export function ThemeSelector() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      snapToInterval={147} // 135 width + 12 margin
+      snapToInterval={120}
       decelerationRate="fast"
-      contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 4 }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 2 }}
     >
       {THEME_ORDER.map((id) => (
         <ThemeCard
@@ -126,4 +130,3 @@ export function ThemeSelector() {
     </ScrollView>
   );
 }
-

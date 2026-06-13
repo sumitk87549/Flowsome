@@ -1,7 +1,7 @@
-// app/(sessions)/focus/session.tsx
+// Sprint 9 — app/(sessions)/focus/session.tsx
 import { View, useWindowDimensions, TextInput, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as KeepAwake from 'expo-keep-awake';
 import {
@@ -20,7 +20,7 @@ import { FlowText } from '../../../components/ui/FlowText';
 import { FlowButton } from '../../../components/ui/FlowButton';
 import { CircularTimer } from '../../../components/timer/CircularTimer';
 import { ParticleCanvas } from '../../../components/particles/ParticleCanvas';
-import { useAmbientAudio, useBinauralAudio } from '../../../hooks/useAudio';
+import { useAmbientAudio, useBinauralAudio, useSFX } from '../../../hooks/useAudio';
 import { useTimer } from '../../../hooks/useTimer';
 import { useAppStore } from '../../../store/appStore';
 import { useTheme, useThemeConfig } from '../../../hooks/useTheme';
@@ -29,7 +29,9 @@ import { useSettingsStore } from '../../../store/settingsStore';
 import { FOCUS_MODES } from '../../../constants/focus-modes';
 import { formatTime } from '../../../utils/timeUtils';
 import { HapticUtils } from '../../../utils/hapticUtils';
-import { QUOTES } from '../../../constants/quotes';
+import { QUOTES, getQuoteForSession } from '../../../constants/quotes';
+import { useHistoryStore } from '../../../store/historyStore';
+import { checkAndAwardBadges } from '../../../utils/achievementUtils';
 
 export default function FocusSession() {
   const router = useRouter();
@@ -55,6 +57,12 @@ export default function FocusSession() {
   const textOpacity = useSharedValue(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
+  const addSession = useHistoryStore((s) => s.addSession);
+  const awardBadge = useHistoryStore((s) => s.awardBadge);
+  const showBadgeToast = useCallback((_badge: any) => {}, []);
+
+  const { playSessionBegin, playSessionEnd } = useSFX();
+
   const sessionDurationSeconds = (workMin ?? 25) * 60;
   const totalSessionMinutes = Math.floor(sessionDurationSeconds / 60);
 
@@ -64,14 +72,46 @@ export default function FocusSession() {
     totalPomodoros: 1,
     onAllComplete: () => {
       HapticUtils.success();
+      playSessionEnd();
     },
   });
 
-  const themeQuotes = QUOTES[activeTheme] || QUOTES['rajasthan'];
-  const activeQuote = themeQuotes[0];
+  const themeQuotes = QUOTES.filter((q) => q.region === activeTheme || q.region === 'all');
+  const activeQuote = themeQuotes.length > 0 ? themeQuotes[0] : QUOTES[0];
+
+  const completionQuote = useMemo(
+    () => getQuoteForSession('flow', activeTheme),
+    [activeTheme],
+  );
 
   useAmbientAudio(activeTheme, true);
-  useBinauralAudio(focusMode.binauralMode, status === 'running');
+  const binauralPlayer = useBinauralAudio(focusMode.binauralMode, status === 'running');
+
+  // Mark session as active
+  useEffect(() => {
+    const appState = useAppStore.getState() as any;
+    appState.setSessionActive?.(true);
+    return () => {
+      appState.setSessionActive?.(false);
+    };
+  }, []);
+
+  // Session begin timeout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      playSessionBegin();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [playSessionBegin]);
+
+  // Unmount binaural
+  useEffect(() => {
+    return () => {
+      try {
+        if (typeof binauralPlayer.pause === 'function') binauralPlayer.pause();
+      } catch (_) {}
+    };
+  }, [binauralPlayer]);
 
   useEffect(() => {
     if (keepAwakeEnabled) KeepAwake.activateKeepAwakeAsync();
@@ -107,6 +147,18 @@ export default function FocusSession() {
   useEffect(() => {
     if (status === 'complete' && !showCompletion) {
       setShowCompletion(true);
+
+      addSession({
+        type: 'focus',
+        durationMinutes: Math.max(1, Math.floor(sessionDurationSeconds / 60)),
+        theme: activeTheme,
+        practiceId: null,
+        intention: intention ?? null,
+        moodBefore: null,
+        moodAfter: null,
+        accomplishmentNote: accomplishment?.trim() || null,
+      });
+      checkAndAwardBadges(awardBadge, showBadgeToast);
 
       completionBgOpacity.value = withTiming(1, { duration: 2000 });
       textOpacity.value = withSequence(
@@ -219,7 +271,7 @@ export default function FocusSession() {
           <FlowButton
             label="End Session"
             variant="ghost"
-            onPress={() => { stop(); router.back(); }}
+            onPress={() => { stop(); router.canGoBack() ? router.back() : router.replace('/'); }}
             style={{ width: '100%', alignItems: 'center' }}
           />
         </View>
@@ -287,6 +339,23 @@ export default function FocusSession() {
             <Text style={[styles.completionRegion, { color: theme.textMuted }]}>
               {activeThemeName}
             </Text>
+
+            {completionQuote && (
+              <View style={{ paddingHorizontal: 24, marginTop: 20 }}>
+                <Text style={{
+                  color: theme.textMuted,
+                  fontSize: 14,
+                  fontFamily: 'CormorantGaramond-Italic',
+                  textAlign: 'center',
+                  lineHeight: 22,
+                }}>
+                  "{language === 'hi-IN' && completionQuote.textHindi ? completionQuote.textHindi : completionQuote.text}"
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                  — {completionQuote.attribution}
+                </Text>
+              </View>
+            )}
 
             <TextInput
               style={[
@@ -424,4 +493,3 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
 });
-

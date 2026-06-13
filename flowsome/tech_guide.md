@@ -48,7 +48,9 @@
 - **Dynamic Particle System:** Skia-based animations tied to themes
 - **Spatial Audio:** Ambient sounds, binaural beats (alpha/theta/delta), SFX
 - **Haptic Feedback:** Contextual haptics for interactions and phase transitions
-- **Keep Awake:** Optional screen awake during sessions
+- **Gamification & Stats:** 108-bead Mala counter, daily streaks, achievement badges, and 365-day heatmap
+- **Wisdom System:** Cultural quotes and seasonal greetings on the home screen
+- **Onboarding Flow:** First-run experience capturing user name and preferences
 
 ---
 
@@ -104,10 +106,13 @@ flowsome/
 ├── app/                          # EXPO ROUTER - All screens & routing
 │   ├── _layout.tsx               # ROOT LAYOUT: Fonts, theme provider, splash, nav bar sync
 │   ├── index.tsx                 # HOME SCREEN: Theme selector, session cards, particle background
+│   ├── onboarding.tsx            # ONBOARDING: First-run setup
 │   ├── settings/
 │   │   └── index.tsx             # SETTINGS SCREEN: Language, audio volumes, haptics, keep-awake
+│   ├── (screens)/
+│   │   └── stats.tsx             # STATS SCREEN: 365-day heatmap, mala progress, streak
 │   └── (sessions)/               # ROUTE GROUP for all practice sessions
-│       ├── _layout.tsx           # Shared layout for sessions (optional)
+│       ├── _layout.tsx           # Shared layout for sessions
 │       ├── breathing/
 │       │   ├── index.tsx         # Breathing picker (select pattern)
 │       │   └── session.tsx       # Active breathing session (orb animation)
@@ -122,6 +127,8 @@ flowsome/
 │           └── session.tsx       # Active flow session
 │
 ├── components/                   # REUSABLE UI COMPONENTS
+│   ├── achievements/             # Gamification UI
+│   │   └── BadgeToast.tsx        # Toast notification for unlocking badges
 │   ├── ui/                       # Generic UI primitives
 │   │   ├── FlowText.tsx          # Themed text with typography variants
 │   │   ├── FlowCard.tsx          # Glassmorphism card with blur
@@ -130,20 +137,29 @@ flowsome/
 │   ├── home/                     # Home screen specific
 │   │   ├── ThemeSelector.tsx     # Horizontal scrollable theme carousel
 │   │   ├── SessionCard.tsx       # Grid cards for session navigation
-│   │   └── DayNightToggle.tsx    # Day/night switch toggle
+│   │   ├── DayNightToggle.tsx    # Day/night switch toggle
+│   │   ├── MalaIndicator.tsx     # 108-bead progress arc
+│   │   └── StreakIndicator.tsx   # Fire icon and daily streak count
 │   ├── breathing/                # Breathing session components
 │   │   ├── BreathingOrb.tsx      # Animated orb (expands/contracts with breath)
 │   │   ├── BreathingPhaseLabel.tsx # Current phase label (Inhale/Hold/etc.)
 │   │   └── BreathingProgress.tsx # Cycle progress dots
 │   ├── meditation/
 │   │   ├── MeditationCard.tsx    # Meditation type selection card
-│   │   └── MeditationAmbient.tsx # Meditation-specific audio controller
+│   │   ├── MeditationAmbient.tsx # Meditation-specific audio controller
+│   │   ├── MandalaView.tsx       # Rotating Skia mandala for mindfulness
+│   │   └── TratakaFlame.tsx      # Skia flame simulation for gazing
 │   ├── focus/
 │   │   ├── IntentionInput.tsx    # Text input for session intention
-│   │   └── FocusAmbient.tsx      # Focus-specific audio controller
+│   │   ├── FocusAmbient.tsx      # Focus-specific audio controller
+│   │   └── AmbientWave.tsx       # Triple standing wave animation
 │   ├── timer/
 │   │   ├── TimeDisplay.tsx       # MM:SS timer display
-│   │   └── CircularTimer.tsx     # Circular progress timer (Skia)
+│   │   └── CircularTimer.tsx     # Circular liquid progress timer (Skia)
+│   ├── session/
+│   │   └── NowPlayingBar.tsx     # Persistent audio controls for active sessions
+│   ├── stats/
+│   │   └── HeatmapCalendar.tsx   # 365-day Skia-based session heatmap
 │   ├── particles/                # Skia particle systems
 │   │   ├── ParticleCanvas.tsx    # Main canvas wrapper (full-screen, absolute)
 │   │   ├── DustParticles.tsx     # Rajasthan desert dust
@@ -213,21 +229,18 @@ flowsome/
 ### State Management Flow
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      ZUSTAND STORES                         │
-├──────────────────┬──────────────────┬───────────────────────┤
-│   appStore       │  settingsStore   │    sessionStore       │
-│──────────────────│──────────────────│───────────────────────│
-│ • activeTheme    │ • language       │ • activeMode          │
-│ • dayNight       │ • ambientVolume  │ • timerState          │
-│ • isSessionActive│ • binauralVolume │ • breathingPhase      │
-│                  │ • sfxVolume      │ • currentCycle        │
-│                  │ • hapticsEnabled │ • totalCycles         │
-│                  │ • keepAwakeEnabled│ • secondsRemaining   │
-│                  │                  │ • selectedPatternId   │
-│                  │                  │ • selectedMeditationId│
-│                  │                  │ • intention           │
-└──────────────────┴──────────────────┴───────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                              ZUSTAND STORES                            │
+├──────────────────┬──────────────────┬──────────────────┬───────────────────┤
+│   appStore       │  settingsStore   │  historyStore    │   sessionStore    │
+│──────────────────│──────────────────│──────────────────│───────────────────│
+│ • activeTheme    │ • language       │ • sessions       │ • activeMode      │
+│ • dayNight       │ • ambientVolume  │ • streak         │ • timerState      │
+│ • isSessionActive│ • binauralVolume │ • lastSessionDate│ • breathingPhase  │
+│ • hasSeenOnboarding│ • sfxVolume    │ • badges         │ • currentCycle    │
+│ • username       │ • hapticsEnabled │                  │ • totalCycles     │
+│                  │ • keepAwake      │                  │ • secondsRemaining│
+└──────────────────┴──────────────────┴──────────────────┴───────────────────┘
                             ↓
         All components read/write via custom hooks
                             ↓
@@ -560,6 +573,46 @@ Renders one of:
 - Uses `@shopify/react-native-skia` Canvas
 - Animations driven by `react-native-reanimated`
 - Colors pulled from `theme.particle`
+
+---
+
+### 5.7 Gamification Engine (`store/historyStore.ts`)
+
+**Purpose:** Track user progress, daily streaks, 108-bead mala counting, and achievement badges.
+
+**Output:**
+```typescript
+interface SessionRecord {
+  id: string;
+  typeId: string;
+  category: 'breathing' | 'meditation' | 'pomodoro' | 'focus';
+  durationMinutes: number;
+  completedAt: string;
+  theme: string;
+}
+
+interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+}
+```
+
+**Key Features:**
+- `getStreak()`: Calculates consecutive days of practice.
+- `getMalaProgress()`: Returns current count towards 108 sessions (Mala cycle).
+- `getTotalMinutes()`: Aggregates total practice time.
+- Badges are awarded automatically at end-of-session via `checkAndAwardBadges()` utility.
+
+---
+
+### 5.8 Wisdom & Quotes System (`constants/quotes.ts`)
+
+**Purpose:** Provide context-aware inspirational quotes before/after sessions and on the home screen.
+- Fetches daily quotes specific to session types (focus vs breathe).
+- Automatically selects Hindi/English based on `settingsStore.language`.
 
 ---
 

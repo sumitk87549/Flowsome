@@ -1,5 +1,5 @@
-// components/ui/FlowText.tsx
-import { Text, TextProps } from 'react-native';
+// components/ui/FlowText.tsx — Sprint 13: Built-in text shadows for headings
+import { Text, TextProps, TextStyle } from 'react-native';
 import { FONTS, FONT_SIZES } from '../../constants/typography';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -8,6 +8,13 @@ interface FlowTextProps extends TextProps {
   size?: keyof typeof FONT_SIZES;
   color?: string;
 }
+
+// Heading variants get a subtle text shadow for contrast over particle backgrounds
+const HEADING_SHADOW: TextStyle = {
+  textShadowColor: 'rgba(0,0,0,0.35)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 3,
+};
 
 export function FlowText({
   variant = 'body',
@@ -28,6 +35,8 @@ export function FlowText({
     label: FONTS.bodySemiBold,
   }[variant];
 
+  const isHeading = variant === 'heading' || variant === 'headingLight' || variant === 'headingItalic';
+
   return (
     <Text
       style={[
@@ -36,6 +45,7 @@ export function FlowText({
           fontSize: FONT_SIZES[size],
           color: color ?? theme.text,
         },
+        isHeading ? HEADING_SHADOW : undefined,
         style,
       ]}
       {...props}

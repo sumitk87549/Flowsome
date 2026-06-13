@@ -1,14 +1,13 @@
-// app/(sessions)/pomodoro/index.tsx
-import { View, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
+// app/(sessions)/pomodoro/index.tsx — Premium: Visual overhaul
+import { View, ScrollView, TouchableOpacity, Text } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeScreen } from '../../../components/ui/SafeScreen';
 import { FlowText } from '../../../components/ui/FlowText';
 import { FlowCard } from '../../../components/ui/FlowCard';
 import { FlowButton } from '../../../components/ui/FlowButton';
-import { useTheme, useThemeConfig } from '../../../hooks/useTheme';
-import { THEME_IMAGES } from '../../../constants/theme-images';
+import { useTheme } from '../../../hooks/useTheme';
 import { HapticUtils } from '../../../utils/hapticUtils';
 import { IntentionInput } from '../../../components/focus/IntentionInput';
 
@@ -18,7 +17,6 @@ const POMODORO_COUNTS = [2, 3, 4, 6];
 
 export default function PomodoroConfig() {
   const theme = useTheme();
-  const config = useThemeConfig();
   const router = useRouter();
   const [workMin, setWorkMin] = useState(25);
   const [breakMin, setBreakMin] = useState(5);
@@ -86,31 +84,36 @@ export default function PomodoroConfig() {
   return (
     <SafeScreen>
       <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <FlowText color={theme.textMuted}>← Back</FlowText>
+        <TouchableOpacity 
+          onPress={() => { HapticUtils.light(); router.back(); }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            marginBottom: 12,
+          }}
+        >
+          <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
+          <Text style={{
+            fontFamily: 'DMSans-Medium',
+            fontSize: 14,
+            color: theme.textMuted,
+          }}>
+            Back
+          </Text>
         </TouchableOpacity>
+
         <FlowText
           variant="heading"
           size="4xl"
           color={theme.primary}
-          style={{ marginTop: 16 }}
+          style={{ marginTop: 4 }}
         >
-          ⏱️ Pomodoro
+          Focus
         </FlowText>
-        <FlowText variant="body" size="sm" color={theme.textMuted} style={{ marginTop: 4 }}>
-          Interval training for mental endurance
+        <FlowText variant="body" size="sm" color={theme.textMuted} style={{ marginTop: 2 }}>
+          Interval work cycles for mental endurance
         </FlowText>
-        
-        {/* Landscape banner showcasing the selected region */}
-        <View style={{ borderRadius: 16, overflow: 'hidden', height: 95, marginTop: 16, borderWidth: 1, borderColor: theme.cardBorder }}>
-          <ImageBackground source={THEME_IMAGES[config.id]} style={{ width: '100%', height: '100%', justifyContent: 'flex-end' }}>
-            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={{ padding: 12 }}>
-              <FlowText color="#FFFFFF" variant="headingItalic" size="sm" style={{ letterSpacing: 0.5 }}>
-                Focusing with regional presence in {config.name} {config.icon}
-              </FlowText>
-            </LinearGradient>
-          </ImageBackground>
-        </View>
       </View>
       
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, gap: 24, paddingTop: 20, paddingBottom: 150 }}>
@@ -146,7 +149,7 @@ export default function PomodoroConfig() {
       
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 40 }}>
         <FlowButton
-          label="Start Pomodoro"
+          label="Start Focus Session"
           size="lg"
           onPress={handleStart}
           style={{ width: '100%', alignItems: 'center' }}
@@ -155,4 +158,3 @@ export default function PomodoroConfig() {
     </SafeScreen>
   );
 }
-

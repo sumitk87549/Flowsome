@@ -1,0 +1,4347 @@
+1# 💎 FLOWSOME — DIAMOND SPRINT GUIDE
+### APK-Shippable After Every Sprint · Zero Guesswork · Exact Code
+
+> **Stack:** Expo 56 · RN 0.85.3 · React 19 · Skia 2.6.2 · Reanimated 4.3.1 · Worklets 0.8.3  
+> **Audio:** expo-audio ~56.0.11 · **Haptics:** expo-haptics ~56.0.3 · **State:** Zustand 5.0.14  
+> **Rule:** Every sprint ends with a working APK. If code is shown, it runs.
+
+---
+
+## ⚡ CRITICAL RULES BEFORE YOU START ANY SPRINT
+
+### Reanimated 4 + Skia 2.6 — The Two Laws
+
+**Law 1: No Reanimated shared values accessed directly inside Skia canvas.**  
+Everything that drives Skia must go through `useDerivedValue`.
+
+```typescript
+// ❌ WRONG — crashes in Reanimated 4 + Skia 2.6
+const progress = useSharedValue(0);
+<Circle cx={50} cy={50} r={progress.value * 50} />
+
+// ✅ CORRECT
+const progress = useSharedValue(0);
+const radius = useDerivedValue(() => progress.value * 50);
+<Circle cx={50} cy={50} r={radius} />
+```
+
+**Law 2: `useSharedValue` and `useDerivedValue` must be called at the top level of a component — never inside loops or conditions.**  
+If you have N particles, each particle must be its own component that receives its seed as a prop. The parent creates N components; each component owns its own shared values.
+
+```typescript
+// ❌ WRONG — violates Rules of Hooks
+const particles = Array(50).fill(0).map((_, i) => {
+  const x = useSharedValue(Math.random() * width); // CRASHES
+  return x;
+});
+
+// ✅ CORRECT
+// Parent:
+const seeds = useMemo(() => Array(50).fill(0).map(() => ({
+  x: Math.random() * width,
+  y: Math.random() * height,
+  speed: 0.5 + Math.random() * 1.5,
+})), []);
+return seeds.map((seed, i) => <SingleParticle key={i} seed={seed} />);
+
+// Child component (each has its own hooks at top level):
+function SingleParticle({ seed }: { seed: ParticleSeed }) {
+  const x = useSharedValue(seed.x);
+  const y = useSharedValue(seed.y);
+  // ...
+}
+```
+
+---
+
+## SPRINT 6 — PARTICLE SYSTEM STABILIZATION
+
+**Goal: 60fps, no crash on theme switch, no memory leak over 3 minutes.**
+
+### Step 1: Verify your Babel config has Reanimated plugin LAST
+
+In `babel.config.js`:
+```javascript
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: [
+      // Any other plugins FIRST
+      'react-native-reanimated/plugin', // MUST BE LAST
+    ],
+  };
+};
+```
+
+### Step 2: Verify async-skia.native.tsx pattern
+
+Your `components/async-skia.native.tsx` should lazy-load Skia. This prevents the web bundle from including native-only code:
+
+```typescript
+// components/async-skia.native.tsx
+export { Canvas, Circle, Path, Group, Paint, vec, useValue,
+         useDerivedValue, useSharedValue } from '@shopify/react-native-skia';
+```
+
+```typescript
+// components/async-skia.tsx (web fallback)
+export const Canvas = ({ children, ...props }: any) => null;
+export const Circle = () => null;
+export const Path = () => null;
+// etc.
+```
+
+### Step 3: The stable ParticleCanvas pattern
+
+Replace your `components/particles/ParticleCanvas.tsx` with this pattern that handles theme switching without crashing:
+
+```typescript
+// components/particles/ParticleCanvas.tsx
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, LayoutChangeEvent } from 'react-native';
+import { useAppStore } from '../../store/appStore';
+import { useTheme } from '../../hooks/useTheme';
+import DustParticles from './DustParticles';
+import SnowParticles from './SnowParticles';
+import RainParticles from './RainParticles';
+import OceanWave from './OceanWave';
+
+interface ParticleCanvasProps {
+  breathPhase?: 'inhale' | 'holdIn' | 'exhale' | 'holdOut' | 'idle';
+  opacity?: number; // 0–1, defaults to 1
+}
+
+export default function ParticleCanvas({
+  breathPhase = 'idle',
+  opacity = 1,
+}: ParticleCanvasProps) {
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [ready, setReady] = useState(false);
+  const activeTheme = useAppStore((s) => s.activeTheme);
+  const theme = useTheme();
+
+  // KEY: remount particle component on theme change to prevent
+  // stale shared values from old theme accumulating
+  const [mountKey, setMountKey] = useState(0);
+  useEffect(() => {
+    setMountKey((k) => k + 1);
+  }, [activeTheme]);
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setDimensions({ width, height });
+      setReady(true);
+    }
+  }, []);
+
+  // Map theme to particle type from themes.ts config
+  const particleTypeMap: Record<string, string> = {
+    rajasthan: 'dust',
+    himalaya: 'snow',
+    kerala: 'rain',
+    assam: 'rain',
+    andaman: 'ocean',
+  };
+  const particleType = particleTypeMap[activeTheme] ?? 'dust';
+
+  const renderParticles = () => {
+    if (!ready) return null;
+    const { width, height } = dimensions;
+    const props = { width, height, theme, breathPhase };
+
+    switch (particleType) {
+      case 'dust':  return <DustParticles key={`dust-${mountKey}`} {...props} />;
+      case 'snow':  return <SnowParticles key={`snow-${mountKey}`} {...props} />;
+      case 'rain':  return <RainParticles key={`rain-${mountKey}`} {...props} />;
+      case 'ocean': return <OceanWave key={`ocean-${mountKey}`} {...props} />;
+      default:      return <DustParticles key={`dust-${mountKey}`} {...props} />;
+    }
+  };
+
+  return (
+    <View
+      onLayout={onLayout}
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        opacity,
+      }}
+    >
+      {renderParticles()}
+    </View>
+  );
+}
+```
+
+### Step 4: The stable single-particle pattern (DustParticles as reference)
+
+This is the **correct Skia 2.6.2 + Reanimated 4 pattern** for a particle component. Use this as your template for all 5 particle types:
+
+```typescript
+// components/particles/DustParticles.tsx
+import React, { memo, useMemo } from 'react';
+import { Canvas, Circle } from '@shopify/react-native-skia';
+import { useSharedValue, useDerivedValue, withRepeat,
+         withSequence, withTiming, useEffect as useReanimatedEffect
+} from 'react-native-reanimated';
+
+interface ParticleProps {
+  width: number;
+  height: number;
+  theme: any;
+  breathPhase?: string;
+}
+
+interface DustSeed {
+  startX: number;
+  startY: number;
+  radius: number;
+  driftAmpX: number;
+  driftAmpY: number;
+  driftSpeedX: number;
+  driftSpeedY: number;
+  baseOpacity: number;
+}
+
+// Single particle — owns its own hooks safely at top level
+const DustParticle = memo(function DustParticle({
+  seed, color, breathPhase,
+}: { seed: DustSeed; color: string; breathPhase?: string }) {
+  const t = useSharedValue(seed.startX * 100); // offset start phase
+
+  // Start continuous animation on mount
+  useReanimatedEffect(() => {
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1000, { duration: (seed.driftSpeedX * 1000) / 1 }),
+      ),
+      -1, // infinite
+      false
+    );
+  }, []);
+
+  const cx = useDerivedValue(() => {
+    const phase = (t.value % 1000) / 1000;
+    // Gentle drift: sine wave + breath phase influence
+    let breathOffset = 0;
+    if (breathPhase === 'inhale') breathOffset = -8 * Math.sin(phase * Math.PI);
+    if (breathPhase === 'exhale') breathOffset = 8 * Math.sin(phase * Math.PI);
+    return seed.startX + seed.driftAmpX * Math.sin(phase * Math.PI * 2) + breathOffset;
+  });
+
+  const cy = useDerivedValue(() => {
+    const phase = (t.value % 1000) / 1000;
+    return seed.startY + seed.driftAmpY * Math.cos(phase * Math.PI * 2 * seed.driftSpeedY);
+  });
+
+  const opacity = useDerivedValue(() => {
+    const phase = (t.value % 1000) / 1000;
+    return seed.baseOpacity * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2));
+  });
+
+  return (
+    <Circle cx={cx} cy={cy} r={seed.radius} color={color} opacity={opacity} />
+  );
+});
+
+export default function DustParticles({ width, height, theme, breathPhase }: ParticleProps) {
+  const PARTICLE_COUNT = 35;
+
+  const seeds: DustSeed[] = useMemo(() =>
+    Array(PARTICLE_COUNT).fill(0).map(() => ({
+      startX: Math.random() * width,
+      startY: Math.random() * height,
+      radius: 1 + Math.random() * 2.5,
+      driftAmpX: 20 + Math.random() * 40,
+      driftAmpY: 15 + Math.random() * 30,
+      driftSpeedX: 4000 + Math.random() * 8000,
+      driftSpeedY: 0.3 + Math.random() * 0.7,
+      baseOpacity: 0.15 + Math.random() * 0.35,
+    })),
+  [width, height]);
+
+  if (width === 0) return null;
+
+  return (
+    <Canvas style={{ width, height }}>
+      {seeds.map((seed, i) => (
+        <DustParticle
+          key={i}
+          seed={seed}
+          color={theme.particle}
+          breathPhase={breathPhase}
+        />
+      ))}
+    </Canvas>
+  );
+}
+```
+
+**Apply the same structure to SnowParticles, RainParticles, and OceanWave** — each uses its own `SingleParticle` memo component that owns its shared values at the top level.
+
+### Sprint 6 — APK Checkpoint
+
+Before moving to S7, confirm on your physical Android device:
+- [ ] All 5 themes show smooth particles (no jank)
+- [ ] Switching themes 5x in a row — no crash
+- [ ] Leave Rajasthan theme open for 3 minutes — no visible memory growth, no slowdown
+- [ ] `pointerEvents="none"` confirmed — home screen taps work through particle layer
+- [ ] Day/Night toggle — particle color updates correctly (uses `theme.particle` from `useTheme()`)
+
+---
+
+## SPRINT 7 — BREATHING + FOCUS SESSION OVERHAUL
+
+**Duration: ~10 days · Highest ROI sprint in the entire roadmap.**
+
+---
+
+### 7A — THE LIVING BREATHING ORB
+
+#### Step 1: Add 3 new color fields to ThemeColors in `constants/themes.ts`
+
+Add these to the `ThemeColors` interface:
+```typescript
+interface ThemeColors {
+  // ... existing 13 fields ...
+  orbInhale: string;   // Warm, bright — center of breathing in
+  orbExhale: string;   // Cool, deep — center of releasing
+  orbHold: string;     // Stable, full — the held state
+}
+```
+
+Then populate for all 10 variants (5 themes × 2 day/night). Example for Rajasthan:
+```typescript
+// Rajasthan day
+orbInhale: '#FDE68A', // warm amber-gold
+orbExhale: '#B45309', // deep amber-brown
+orbHold:   '#F59E0B', // steady saffron
+
+// Rajasthan night
+orbInhale: '#FEF08A', // brighter gold in the dark
+orbExhale: '#92400E', // very deep brown
+orbHold:   '#D97706', // dimmer gold
+
+// Himalaya day
+orbInhale: '#BAE6FD', // icy sky blue
+orbExhale: '#1E3A5F', // deep mountain blue
+orbHold:   '#60A5FA', // clear blue
+
+// Himalaya night
+orbInhale: '#E0F2FE', // pale frost
+orbExhale: '#0C2340', // near-black blue
+orbHold:   '#3B82F6', // electric blue
+
+// Kerala day
+orbInhale: '#A7F3D0', // fresh green
+orbExhale: '#065F46', // deep jungle
+orbHold:   '#34D399', // emerald
+
+// Kerala night
+orbInhale: '#D1FAE5', // pale mint
+orbExhale: '#022C22', // darkest green
+orbHold:   '#10B981', // teal
+
+// Assam day
+orbInhale: '#FEF3C7', // morning mist
+orbExhale: '#3B1F00', // forest dark
+orbHold:   '#A3E635', // tea-leaf green
+
+// Assam night
+orbInhale: '#F0FDF4', // night mist
+orbExhale: '#1A0F00', // deep forest night
+orbHold:   '#4ADE80', // bioluminescent
+
+// Andaman day
+orbInhale: '#BAE6FD', // ocean surface
+orbExhale: '#0C4A6E', // deep ocean
+orbHold:   '#38BDF8', // clear water
+
+// Andaman night
+orbInhale: '#E0F2FE', // moonlit ocean
+orbExhale: '#082F49', // abyssal
+orbHold:   '#0284C7', // deep blue glow
+```
+
+#### Step 2: Upgrade `components/breathing/BreathingOrb.tsx`
+
+This is the full replacement. It adds:
+- Phase-reactive gradient (inner color blends between `orbInhale`/`orbExhale`/`orbHold`)
+- Glow ring that leads on inhale, trails on exhale
+- All driven by `phaseProgress` from your existing `useBreathing` hook
+
+```typescript
+// components/breathing/BreathingOrb.tsx
+import React from 'react';
+import { View } from 'react-native';
+import { Canvas, Circle, RadialGradient, vec } from '@shopify/react-native-skia';
+import { useDerivedValue, interpolate, Extrapolation } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
+
+type BreathingPhase = 'inhale' | 'holdIn' | 'exhale' | 'holdOut' | 'idle';
+
+interface BreathingOrbProps {
+  phase: BreathingPhase;
+  // phaseProgress is a Reanimated SharedValue (0→1 within current phase)
+  phaseProgress: SharedValue<number>;
+  theme: {
+    orb: string;
+    orbGlow: string;
+    orbInhale: string;
+    orbExhale: string;
+    orbHold: string;
+  };
+  size?: number; // diameter, default 220
+}
+
+export default function BreathingOrb({
+  phase, phaseProgress, theme, size = 220,
+}: BreathingOrbProps) {
+  const center = size / 2;
+  const maxRadius = size * 0.42;  // orb max size
+  const minRadius = size * 0.22;  // orb min size
+  const glowExtra = size * 0.12;  // how much bigger the glow ring is vs orb
+
+  // --- Orb radius (driven by phase + phaseProgress) ---
+  const orbRadius = useDerivedValue(() => {
+    const p = phaseProgress.value;
+    switch (phase) {
+      case 'inhale':
+        return interpolate(p, [0, 1], [minRadius, maxRadius], Extrapolation.CLAMP);
+      case 'holdIn':
+        return maxRadius;
+      case 'exhale':
+        return interpolate(p, [0, 1], [maxRadius, minRadius], Extrapolation.CLAMP);
+      case 'holdOut':
+      case 'idle':
+        return minRadius;
+      default:
+        return minRadius + (maxRadius - minRadius) * 0.5;
+    }
+  });
+
+  // --- Glow ring radius (leads on inhale, lags on exhale) ---
+  const glowRadius = useDerivedValue(() => {
+    const p = phaseProgress.value;
+    const base = orbRadius.value + glowExtra;
+    switch (phase) {
+      case 'inhale':
+        // glow is ~15% ahead of orb
+        const aheadInhale = interpolate(p, [0, 0.15, 1], [0, glowExtra * 0.6, glowExtra], Extrapolation.CLAMP);
+        return minRadius + aheadInhale + (maxRadius - minRadius) * p;
+      case 'exhale':
+        // glow lags ~15% behind orb (contracts after orb)
+        const lagExhale = interpolate(p, [0, 0.15, 1], [glowExtra, glowExtra * 0.6, 0], Extrapolation.CLAMP);
+        return maxRadius - (maxRadius - minRadius) * Math.max(0, p - 0.15) + lagExhale;
+      default:
+        return base;
+    }
+  });
+
+  // --- Inner color (blends between phase colors) ---
+  const centerColor = useDerivedValue(() => {
+    // Return the static color string for the current phase
+    // Skia RadialGradient accepts string colors
+    switch (phase) {
+      case 'inhale':   return theme.orbInhale;
+      case 'holdIn':   return theme.orbHold;
+      case 'exhale':   return theme.orbExhale;
+      case 'holdOut':  return theme.orbExhale;
+      default:         return theme.orb;
+    }
+  });
+
+  // --- Glow ring opacity (pulses during holdIn) ---
+  const glowOpacity = useDerivedValue(() => {
+    if (phase === 'holdIn') {
+      // Gentle shimmer: 0.25 → 0.45 pulse using phaseProgress as sine driver
+      return 0.25 + 0.2 * Math.sin(phaseProgress.value * Math.PI * 3);
+    }
+    if (phase === 'holdOut') return 0.12;
+    if (phase === 'inhale')  return 0.15 + phaseProgress.value * 0.25;
+    if (phase === 'exhale')  return 0.4 - phaseProgress.value * 0.2;
+    return 0.15;
+  });
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Canvas style={{ width: size, height: size }}>
+        {/* Glow ring (behind the orb) */}
+        <Circle
+          cx={center}
+          cy={center}
+          r={glowRadius}
+          color={theme.orbGlow}
+          opacity={glowOpacity}
+        />
+
+        {/* Main orb with radial gradient */}
+        <Circle cx={center} cy={center} r={orbRadius}>
+          <RadialGradient
+            c={vec(center, center)}
+            r={orbRadius}
+            colors={[centerColor, theme.orb]}
+            positions={[0, 1]}
+          />
+        </Circle>
+      </Canvas>
+    </View>
+  );
+}
+```
+
+#### Step 3: Expose `phaseProgress` as a SharedValue from `useBreathing.ts`
+
+Your existing `useBreathing` hook likely computes `phaseProgress` as a regular number. You need it as a `SharedValue<number>` so Skia can consume it without a JS-thread re-render on every frame.
+
+In `hooks/useBreathing.ts`, add:
+
+```typescript
+import { useSharedValue } from 'react-native-reanimated';
+
+// Inside the hook, alongside your existing state:
+const phaseProgressShared = useSharedValue(0);
+
+// In your 100ms interval effect, alongside updating regular state:
+// phaseProgress = elapsedInPhase / phaseDuration  (0→1)
+const newProgress = Math.min(elapsedInPhase / currentPhase.durationSeconds, 1);
+setPhaseProgress(newProgress); // your existing state update for UI
+phaseProgressShared.value = newProgress; // NEW: update shared value for Skia
+
+// Return it:
+return {
+  // ...existing returns...
+  phaseProgressShared, // SharedValue<number>
+};
+```
+
+Then in `app/(sessions)/breathing/session.tsx`:
+```typescript
+const { phase, phaseProgressShared, ... } = useBreathing(pattern);
+
+// Pass both to BreathingOrb:
+<BreathingOrb
+  phase={phase}
+  phaseProgress={phaseProgressShared}
+  theme={theme}
+  size={220}
+/>
+```
+
+#### Step 4: Add ParticleCanvas to breathing session screen
+
+In `app/(sessions)/breathing/session.tsx`, add the particle layer:
+
+```typescript
+import ParticleCanvas from '../../components/particles/ParticleCanvas';
+
+// In the JSX, as the FIRST child of your root View (renders behind everything):
+<View style={{ flex: 1, backgroundColor: theme.background }}>
+  {/* Background particle layer — same as home screen but dimmer */}
+  <ParticleCanvas breathPhase={phase} opacity={0.45} />
+
+  {/* Rest of your session UI */}
+  <SafeScreen>
+    ...
+  </SafeScreen>
+</View>
+```
+
+#### Step 5: Phase Label redesign in `components/breathing/BreathingPhaseLabel.tsx`
+
+Complete replacement:
+
+```typescript
+// components/breathing/BreathingPhaseLabel.tsx
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useSettings } from '../../hooks/useSettings';
+
+const PHASE_TEXT: Record<string, { en: string; hi: string }> = {
+  inhale:  { en: 'Inhale',  hi: 'श्वास लें'  },
+  holdIn:  { en: 'Hold',    hi: 'रोकें'     },
+  exhale:  { en: 'Exhale',  hi: 'छोड़ें'     },
+  holdOut: { en: 'Rest',    hi: 'विश्राम'   },
+  idle:    { en: 'Ready',   hi: 'तैयार'     },
+};
+
+interface Props {
+  phase: string;
+  secondsRemaining: number;
+  theme: {
+    text: string;
+    textMuted: string;
+  };
+}
+
+export default function BreathingPhaseLabel({ phase, secondsRemaining, theme }: Props) {
+  const { language } = useSettings();
+  const isHindi = language === 'hi-IN';
+  const phaseText = PHASE_TEXT[phase] ?? PHASE_TEXT.idle;
+
+  return (
+    <View style={styles.container}>
+      {/* Watermark countdown number — behind text */}
+      <Text
+        style={[
+          styles.watermark,
+          { color: theme.text, fontFamily: 'CormorantGaramond-Light' },
+        ]}
+        aria-hidden
+      >
+        {secondsRemaining}
+      </Text>
+
+      {/* Primary phase name — English */}
+      <Text
+        style={[
+          styles.primaryLabel,
+          { color: theme.text, fontFamily: 'CormorantGaramond-Medium' },
+        ]}
+      >
+        {phaseText.en}
+      </Text>
+
+      {/* Secondary — Hindi (always shown, even in English mode, as cultural flavor) */}
+      <Text
+        style={[
+          styles.hindiLabel,
+          { color: theme.textMuted, fontFamily: 'DMSans-Regular' },
+        ]}
+      >
+        {phaseText.hi}
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    minHeight: 80,
+  },
+  watermark: {
+    position: 'absolute',
+    fontSize: 120,
+    opacity: 0.10,
+    letterSpacing: -4,
+  },
+  primaryLabel: {
+    fontSize: 36,
+    letterSpacing: 4,
+    textTransform: 'uppercase',
+  },
+  hindiLabel: {
+    fontSize: 16,
+    marginTop: 4,
+    opacity: 0.7,
+  },
+});
+```
+
+#### Step 6: Breathing Completion Screen
+
+In `app/(sessions)/breathing/session.tsx`, add a completion state. After the session completes (your hook sets `state === 'complete'`), instead of immediately navigating home, show a 5-second completion overlay:
+
+```typescript
+// Add to session.tsx state:
+const [showCompletion, setShowCompletion] = useState(false);
+const [completionTimer, setCompletionTimer] = useState(5);
+const [moodAfter, setMoodAfter] = useState<number | null>(null);
+
+// Add to useEffect watching breathing state:
+useEffect(() => {
+  if (breathingState === 'complete' && !showCompletion) {
+    setShowCompletion(true);
+    playSingingBowl(); // your existing SFX
+    // 5-second auto-dismiss countdown
+    const interval = setInterval(() => {
+      setCompletionTimer((t) => {
+        if (t <= 1) {
+          clearInterval(interval);
+          router.replace('/');
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }
+}, [breathingState]);
+
+// Completion screen JSX (renders as absolute overlay when showCompletion is true):
+{showCompletion && (
+  <View style={[StyleSheet.absoluteFillObject, styles.completionOverlay]}>
+    {/* Fading glow — static orb in exhale state */}
+    <View style={styles.completionOrb}>
+      <BreathingOrb phase="holdOut" phaseProgress={staticZeroShared} theme={theme} size={140} />
+    </View>
+
+    {/* Session summary */}
+    <Text style={[styles.completionTitle, { color: theme.text, fontFamily: 'CormorantGaramond-Medium' }]}>
+      Session Complete
+    </Text>
+    <Text style={[styles.completionStats, { color: theme.textMuted }]}>
+      {totalCycles} cycles · {selectedPatternId?.replace(/-/g, ' ')}
+    </Text>
+
+    {/* Mood selector — 5 dots */}
+    <View style={styles.moodRow}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <TouchableOpacity
+          key={n}
+          onPress={() => { setMoodAfter(n); hapticLight(); }}
+          style={[
+            styles.moodDot,
+            { backgroundColor: moodAfter === n ? theme.primary : theme.cardBorder },
+          ]}
+        />
+      ))}
+    </View>
+    <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 6 }}>
+      How do you feel?
+    </Text>
+
+    {/* Auto-dismiss hint */}
+    <TouchableOpacity onPress={() => router.replace('/')} style={{ marginTop: 24 }}>
+      <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+        Continuing in {completionTimer}s · tap to return
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
+```
+
+Add these to your StyleSheet in session.tsx:
+```typescript
+completionOverlay: {
+  backgroundColor: 'rgba(0,0,0,0.75)',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 100,
+},
+completionOrb: {
+  marginBottom: 32,
+  opacity: 0.8,
+},
+completionTitle: {
+  fontSize: 28,
+  letterSpacing: 2,
+},
+completionStats: {
+  fontSize: 14,
+  marginTop: 8,
+  letterSpacing: 1,
+},
+moodRow: {
+  flexDirection: 'row',
+  gap: 12,
+  marginTop: 28,
+},
+moodDot: {
+  width: 20,
+  height: 20,
+  borderRadius: 10,
+},
+```
+
+You also need a `staticZeroShared` for the completion orb (it just sits at `holdOut`):
+```typescript
+// At the top of the component:
+const staticZeroShared = useSharedValue(0); // never changes, used for static orb states
+```
+
+---
+
+### 7B — FOCUS / POMODORO SESSION OVERHAUL
+
+#### Step 1: The Liquid Depth Meter in `components/timer/CircularTimer.tsx`
+
+Full replacement of your existing circular progress ring. This uses a liquid fill inside a circle:
+
+```typescript
+// components/timer/CircularTimer.tsx
+import React from 'react';
+import { View } from 'react-native';
+import { Canvas, Circle, Path, Group, ClipRect,
+         Rect, Skia, useDerivedValue } from '@shopify/react-native-skia';
+import { useSharedValue, withRepeat, withTiming,
+         useEffect as useReanimatedEffect, interpolateColor } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
+
+interface CircularTimerProps {
+  progress: SharedValue<number>; // 0 (start) → 1 (complete)
+  size?: number;
+  theme: {
+    primary: string;
+    primaryLight: string;
+    background: string;
+    cardBorder: string;
+    text: string;
+  };
+}
+
+export default function CircularTimer({
+  progress, size = 240, theme,
+}: CircularTimerProps) {
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.44;
+
+  // Wave phase — scrolls continuously for live-water feeling
+  const wavePhase = useSharedValue(0);
+  useReanimatedEffect(() => {
+    wavePhase.value = withRepeat(
+      withTiming(Math.PI * 2, { duration: 3000 }),
+      -1,
+      false,
+    );
+  }, []);
+
+  // Fill height from progress (liquid rises from bottom)
+  const fillY = useDerivedValue(() => {
+    // At progress=0: fill starts at bottom (empty vessel)
+    // At progress=1: fill reaches top (full)
+    const fillFraction = progress.value;
+    // fillY is the Y coordinate of the liquid surface
+    // When empty: fillY = cy + r (bottom of circle)
+    // When full:  fillY = cy - r (top of circle)
+    return cy + r - fillFraction * (2 * r);
+  });
+
+  // Wave amplitude — smaller when almost full or almost empty
+  const waveAmp = useDerivedValue(() => {
+    const p = progress.value;
+    // Reduce wave near 0 and 1 for clean entry/exit
+    const edgeDamp = Math.min(p * 8, (1 - p) * 8, 1);
+    return 6 * edgeDamp;
+  });
+
+  // Build the liquid path using Skia's path builder
+  const liquidPath = useDerivedValue(() => {
+    const path = Skia.Path.Make();
+    const steps = 60; // resolution of the wave
+    const stepW = (r * 2) / steps;
+    const startX = cx - r;
+
+    // Start at bottom-left of circle
+    path.moveTo(startX, cy + r);
+
+    // Draw wave across the top surface
+    for (let i = 0; i <= steps; i++) {
+      const x = startX + i * stepW;
+      const waveY = fillY.value
+        + waveAmp.value * Math.sin(wavePhase.value + (i / steps) * Math.PI * 4);
+      if (i === 0) path.moveTo(x, waveY);
+      else path.lineTo(x, waveY);
+    }
+
+    // Close the bottom
+    path.lineTo(cx + r, cy + r);
+    path.lineTo(startX, cy + r);
+    path.close();
+    return path;
+  });
+
+  // Color transitions: 0–25% warm teal → 25–75% indigo → 75–100% gold
+  const liquidColor = useDerivedValue(() => {
+    const p = progress.value;
+    if (p < 0.25) {
+      return interpolateColor(p / 0.25, [0, 1], ['#2DD4BF', '#6366F1']);
+    } else if (p < 0.75) {
+      return interpolateColor((p - 0.25) / 0.5, [0, 1], ['#6366F1', '#8B5CF6']);
+    } else {
+      // Blend toward the theme's primary gold on final quarter
+      return interpolateColor((p - 0.75) / 0.25, [0, 1], ['#8B5CF6', theme.primary]);
+    }
+  });
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Canvas style={{ width: size, height: size }}>
+        {/* Circle outline / track */}
+        <Circle
+          cx={cx} cy={cy} r={r}
+          color={theme.cardBorder}
+          style="stroke"
+          strokeWidth={2}
+        />
+
+        {/* Liquid fill clipped to circle */}
+        <Group
+          clip={Skia.Path.Make().addCircle(cx, cy, r)}
+        >
+          <Path path={liquidPath} color={liquidColor} opacity={0.85} />
+          {/* Second wave layer, offset phase for depth illusion */}
+          <Path path={liquidPath} color={liquidColor} opacity={0.35}
+            transform={[{ translateY: 4 }]}
+          />
+        </Group>
+
+        {/* Circle outline on top (for clean edge) */}
+        <Circle
+          cx={cx} cy={cy} r={r}
+          color={theme.cardBorder}
+          style="stroke"
+          strokeWidth={1.5}
+        />
+      </Canvas>
+    </View>
+  );
+}
+```
+
+**Wiring the timer progress as a SharedValue** — in `hooks/useTimer.ts`, add alongside your existing state:
+
+```typescript
+const progressShared = useSharedValue(0);
+
+// In your countdown interval, add:
+const newProgress = 1 - secondsLeft / totalSeconds;
+progressShared.value = newProgress; // update for Skia
+
+// Return it:
+return { ..., progressShared };
+```
+
+In `app/(sessions)/pomodoro/session.tsx`:
+```typescript
+const { progressShared, secondsLeft, status, phase, ... } = useTimer({ ... });
+
+<CircularTimer progress={progressShared} size={240} theme={theme} />
+```
+
+#### Step 2: Intention Watermark behind the depth meter
+
+In `app/(sessions)/pomodoro/session.tsx`, add behind `CircularTimer`:
+
+```typescript
+import { sessionStore } from '../../store/sessionStore';
+
+// In render:
+const intention = useSessionStore((s) => s.intention);
+
+// Wrap CircularTimer in a relative-positioned container:
+<View style={styles.timerContainer}>
+  {/* Intention watermark */}
+  {intention ? (
+    <Text
+      style={[styles.intentionWatermark, { color: theme.text }]}
+      numberOfLines={3}
+    >
+      {intention}
+    </Text>
+  ) : null}
+
+  {/* Timer on top */}
+  <View style={styles.timerWrapper}>
+    <CircularTimer progress={progressShared} size={240} theme={theme} />
+    {/* Time display centered inside circle */}
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <View style={styles.timeCenter}>
+        <Text style={[styles.timeText, { color: theme.text, fontFamily: 'CormorantGaramond-Medium' }]}>
+          {formatTime(secondsLeft)}
+        </Text>
+        <Text style={[styles.phaseText, { color: theme.textMuted }]}>
+          {timerPhase === 'work' ? 'Focus' : 'Break'}
+        </Text>
+      </View>
+    </View>
+  </View>
+</View>
+```
+
+Add to StyleSheet:
+```typescript
+timerContainer: {
+  alignItems: 'center',
+  justifyContent: 'center',
+  position: 'relative',
+},
+intentionWatermark: {
+  position: 'absolute',
+  fontSize: 22,
+  opacity: 0.08,
+  textAlign: 'center',
+  fontFamily: 'CormorantGaramond-Italic',
+  width: 260,
+  zIndex: 0,
+  lineHeight: 30,
+},
+timerWrapper: {
+  position: 'relative',
+  zIndex: 1,
+},
+timeCenter: {
+  flex: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+timeText: {
+  fontSize: 42,
+  letterSpacing: 2,
+},
+phaseText: {
+  fontSize: 13,
+  letterSpacing: 3,
+  textTransform: 'uppercase',
+  marginTop: 4,
+},
+```
+
+#### Step 3: Add IntentionInput to pomodoro picker
+
+In `app/(sessions)/pomodoro/index.tsx`, import and add `IntentionInput`:
+
+```typescript
+// This component already exists at components/focus/IntentionInput.tsx
+// Just add it to the pomodoro picker screen, below your duration selector:
+import IntentionInput from '../../components/focus/IntentionInput';
+
+// In JSX, before the Begin button:
+<IntentionInput
+  placeholder="What will you focus on?"
+  placeholderHi="आज किस पर ध्यान देंगे?"
+/>
+```
+
+#### Step 4: Pomodoro Dot Glow-Up
+
+Replace your existing round-dots indicator in `app/(sessions)/pomodoro/session.tsx`:
+
+```typescript
+import Animated, { useSharedValue, withSpring,
+                   useAnimatedStyle } from 'react-native-reanimated';
+
+// Single animated pomodoro dot component:
+function PomodoroDot({
+  index, completed, active, theme,
+}: { index: number; completed: boolean; active: boolean; theme: any }) {
+  const scale = useSharedValue(1);
+
+  // Pulse when this dot just became 'completed'
+  useEffect(() => {
+    if (completed) {
+      scale.value = withSpring(1.3, { damping: 5 }, () => {
+        scale.value = withSpring(1.0);
+      });
+    }
+  }, [completed]);
+
+  // Active dot breathes continuously
+  const breatheAnim = useSharedValue(1);
+  useEffect(() => {
+    if (active) {
+      breatheAnim.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 2000 }),
+          withTiming(1.0, { duration: 2000 }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      breatheAnim.value = 1;
+    }
+  }, [active]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value * (active ? breatheAnim.value : 1) }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        animStyle,
+        {
+          width: 12, height: 12, borderRadius: 6,
+          backgroundColor: completed
+            ? theme.primary
+            : active
+              ? theme.primaryLight
+              : theme.cardBorder,
+          // Glow shadow for completed dots
+          shadowColor: completed ? theme.primary : 'transparent',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: completed ? 0.8 : 0,
+          shadowRadius: 6,
+          elevation: completed ? 4 : 0,
+        },
+      ]}
+    />
+  );
+}
+
+// In the session render, replace your existing dots row:
+<View style={{ flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+  {Array(totalPomodoros).fill(0).map((_, i) => (
+    <PomodoroDot
+      key={i}
+      index={i}
+      completed={i < completedPomodoros}
+      active={i === completedPomodoros && status === 'running'}
+      theme={theme}
+    />
+  ))}
+</View>
+```
+
+#### Step 5: "Flow State Entered" moment
+
+In `app/(sessions)/pomodoro/session.tsx`:
+
+```typescript
+// Local state:
+const [flowEntered, setFlowEntered] = useState(false);
+const [showFlowBanner, setShowFlowBanner] = useState(false);
+const bannerOpacity = useSharedValue(0);
+
+// Track elapsed time — add to your existing timer effect:
+const elapsedRef = useRef(0);
+// In your interval or the effect that watches secondsLeft:
+useEffect(() => {
+  if (status === 'running' && timerPhase === 'work') {
+    // totalWorkSeconds is your initial work duration in seconds
+    const elapsed = totalWorkSeconds - secondsLeft;
+    if (elapsed >= 600 && !flowEntered) { // 10 minutes
+      setFlowEntered(true);
+      setShowFlowBanner(true);
+      triggerHeavyHaptic(); // single firm pulse
+      // Fade in then out
+      bannerOpacity.value = withSequence(
+        withTiming(1, { duration: 400 }),
+        withTiming(1, { duration: 2200 }), // hold
+        withTiming(0, { duration: 400 }),
+      );
+      setTimeout(() => setShowFlowBanner(false), 3000);
+    }
+  }
+}, [secondsLeft, status, timerPhase]);
+
+// Banner JSX — add as absolute overlay:
+const bannerStyle = useAnimatedStyle(() => ({
+  opacity: bannerOpacity.value,
+}));
+
+{showFlowBanner && (
+  <Animated.View
+    style={[styles.flowBanner, bannerStyle]}
+    pointerEvents="none"
+  >
+    <Text style={[styles.flowBannerText, { color: theme.text, fontFamily: 'CormorantGaramond-Italic' }]}>
+      Flow state entered 🌊
+    </Text>
+  </Animated.View>
+)}
+```
+
+Add styles:
+```typescript
+flowBanner: {
+  position: 'absolute',
+  top: 60,
+  left: 0,
+  right: 0,
+  alignItems: 'center',
+  zIndex: 50,
+},
+flowBannerText: {
+  fontSize: 18,
+  letterSpacing: 1,
+  opacity: 0.9,
+},
+```
+
+#### Step 6: Session Exit Ritual (Protect the Session)
+
+In `app/(sessions)/pomodoro/session.tsx`:
+
+```typescript
+import { useNavigation } from 'expo-router';
+
+// Add state:
+const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+// Intercept back navigation:
+const navigation = useNavigation();
+useEffect(() => {
+  const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+    if (status === 'running') {
+      e.preventDefault(); // Block the navigation
+      setShowExitConfirm(true);
+    }
+  });
+  return unsubscribe;
+}, [navigation, status]);
+
+// Exit confirm overlay JSX:
+{showExitConfirm && (
+  <View style={[StyleSheet.absoluteFillObject, styles.exitOverlay]}>
+    <Text style={[styles.exitTitle, { color: theme.text, fontFamily: 'CormorantGaramond-Medium' }]}>
+      {Math.floor((totalWorkSeconds - secondsLeft) / 60)} minutes of deep focus is rare and valuable.
+    </Text>
+
+    <TouchableOpacity
+      style={[styles.stayBtn, { backgroundColor: theme.primary }]}
+      onPress={() => setShowExitConfirm(false)}
+    >
+      <Text style={[styles.stayBtnText, { color: theme.background }]}>
+        Stay in flow
+      </Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={styles.endBtn}
+      onPress={() => {
+        setShowExitConfirm(false);
+        router.replace('/');
+      }}
+    >
+      <Text style={[styles.endBtnText, { color: theme.textMuted }]}>
+        Yes, end session
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
+```
+
+Styles:
+```typescript
+exitOverlay: {
+  backgroundColor: 'rgba(0,0,0,0.85)',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 32,
+  zIndex: 200,
+},
+exitTitle: {
+  fontSize: 22,
+  textAlign: 'center',
+  lineHeight: 30,
+  marginBottom: 40,
+},
+stayBtn: {
+  paddingHorizontal: 40,
+  paddingVertical: 16,
+  borderRadius: 12,
+  marginBottom: 16,
+  width: '80%',
+  alignItems: 'center',
+},
+stayBtnText: {
+  fontSize: 18,
+  fontFamily: 'DMSans-Medium',
+},
+endBtn: {
+  padding: 12,
+},
+endBtnText: {
+  fontSize: 14,
+},
+```
+
+### Sprint 7 — APK Checkpoint
+
+- [ ] Breathing orb changes color per phase (warm on inhale, cool on exhale)
+- [ ] Glow ring expands ahead of orb on inhale, contracts after on exhale
+- [ ] Regional particles appear in breathing session (dimmer than home)
+- [ ] Particles drift inward on inhale, outward on exhale
+- [ ] Phase label shows English + Hindi script + watermark number
+- [ ] Breathing completion screen appears for ~5 seconds before home
+- [ ] Mood selector dots are tappable on completion screen
+- [ ] Pomodoro shows liquid fill rising from bottom
+- [ ] Liquid color transitions through teal → indigo → gold
+- [ ] Intention text appears as watermark behind depth meter
+- [ ] Completed pomodoro dots have gold glow + spring animation on complete
+- [ ] Active dot breathes continuously
+- [ ] "Flow state entered 🌊" banner appears at 10-minute mark (only once)
+- [ ] Back button during active session shows exit confirm overlay
+- [ ] "Stay in flow" is visually dominant vs "Yes, end session"
+
+# 💎 FLOWSOME DIAMOND GUIDE — PART 2
+## Sprint 8: Meditation + Deep Work · Sprint 9: Audio + Haptics
+
+---
+
+## SPRINT 8 — MEDITATION + DEEP WORK SESSION OVERHAUL
+
+**Duration: ~7 days**
+
+---
+
+### 8A — MEDITATION SESSIONS
+
+#### Step 1: Hide timer by default + discovery hint
+
+In `app/(sessions)/meditation/session.tsx`:
+
+```typescript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// State:
+const [timerVisible, setTimerVisible] = useState(false);
+const [hasDiscoveredToggle, setHasDiscoveredToggle] = useState(false);
+const [hintOpacity] = useState(new Animated.Value(0));
+
+// On mount, load discovery flag:
+useEffect(() => {
+  AsyncStorage.getItem('flowsome:meditation:timerDiscovered').then((val) => {
+    if (val === 'true') setHasDiscoveredToggle(true);
+  });
+}, []);
+
+// On first toggle:
+const toggleTimer = () => {
+  setTimerVisible((v) => !v);
+  if (!hasDiscoveredToggle) {
+    setHasDiscoveredToggle(true);
+    AsyncStorage.setItem('flowsome:meditation:timerDiscovered', 'true');
+  }
+};
+
+// Hint fade-in effect (shows for first-timers):
+useEffect(() => {
+  if (!hasDiscoveredToggle) {
+    // Fade in hint after 2 seconds
+    const timer = setTimeout(() => {
+      Animated.sequence([
+        Animated.timing(hintOpacity, { toValue: 0.6, duration: 600, useNativeDriver: true }),
+        Animated.timing(hintOpacity, { toValue: 0.6, duration: 4000, useNativeDriver: true }),
+        Animated.timing(hintOpacity, { toValue: 0, duration: 600, useNativeDriver: true }),
+      ]).start();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }
+}, [hasDiscoveredToggle]);
+
+// In JSX — make the whole screen touchable to toggle:
+<TouchableOpacity
+  style={{ flex: 1 }}
+  onPress={toggleTimer}
+  activeOpacity={1}
+>
+  {/* Session content */}
+  
+  {/* Timer — conditionally visible */}
+  {timerVisible && (
+    <View style={styles.timerArea}>
+      {/* Your existing timer display here */}
+      <TimeDisplay secondsLeft={secondsLeft} theme={theme} />
+    </View>
+  )}
+
+  {/* Mandala always visible */}
+  <MandalaView
+    progress={progressShared}
+    meditationType={selectedMeditationId}
+    theme={theme}
+    size={280}
+  />
+
+  {/* Discovery hint */}
+  {!hasDiscoveredToggle && (
+    <Animated.Text
+      style={[styles.hintText, { color: theme.textMuted, opacity: hintOpacity }]}
+    >
+      Tap to reveal timer
+    </Animated.Text>
+  )}
+</TouchableOpacity>
+```
+
+Add styles:
+```typescript
+timerArea: {
+  position: 'absolute',
+  top: '15%',
+  left: 0, right: 0,
+  alignItems: 'center',
+  zIndex: 10,
+},
+hintText: {
+  position: 'absolute',
+  bottom: 80,
+  left: 0, right: 0,
+  textAlign: 'center',
+  fontSize: 12,
+  letterSpacing: 1.5,
+},
+```
+
+#### Step 2: The Mandala Progression System — `components/meditation/MandalaView.tsx`
+
+This is a Skia drawing that incrementally reveals geometry as `progress` goes from 0 to 1. Each meditation type has its own geometry:
+
+```typescript
+// components/meditation/MandalaView.tsx
+import React from 'react';
+import { View } from 'react-native';
+import { Canvas, Path, Circle, Group, Paint,
+         Skia, useDerivedValue } from '@shopify/react-native-skia';
+import type { SharedValue } from 'react-native-reanimated';
+
+type MeditationType = 'mindfulness' | 'vipassana' | 'yoga-nidra' | 'trataka' | null;
+
+interface MandalaViewProps {
+  progress: SharedValue<number>; // 0→1
+  meditationType: MeditationType | string | null;
+  size?: number;
+  theme: {
+    primary: string;
+    primaryLight: string;
+    textMuted: string;
+    orb: string;
+  };
+}
+
+// ---- Utility: build lotus petal path ----
+function buildLotusPetal(
+  cx: number, cy: number, r: number,
+  angleRad: number, petalLength: number, petalWidth: number
+): ReturnType<typeof Skia.Path.Make> {
+  const path = Skia.Path.Make();
+  // Petal is a rotated ellipse extending outward from center
+  const tipX = cx + Math.cos(angleRad) * (r + petalLength);
+  const tipY = cy + Math.sin(angleRad) * (r + petalLength);
+  const leftX = cx + Math.cos(angleRad + Math.PI / 2) * petalWidth;
+  const leftY = cy + Math.sin(angleRad + Math.PI / 2) * petalWidth;
+  const rightX = cx + Math.cos(angleRad - Math.PI / 2) * petalWidth;
+  const rightY = cy + Math.sin(angleRad - Math.PI / 2) * petalWidth;
+
+  path.moveTo(cx + Math.cos(angleRad) * r, cy + Math.sin(angleRad) * r);
+  path.cubicTo(leftX, leftY, tipX - 5, tipY - 5, tipX, tipY);
+  path.cubicTo(tipX + 5, tipY + 5, rightX, rightY, cx + Math.cos(angleRad) * r, cy + Math.sin(angleRad) * r);
+  path.close();
+  return path;
+}
+
+export default function MandalaView({
+  progress, meditationType, size = 280, theme,
+}: MandalaViewProps) {
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // Determine how many "rings" to show based on progress
+  // Each ring has a reveal threshold (0–1)
+  // Rings are drawn from innermost outward
+
+  // ---- MINDFULNESS: Lotus (8 petals in 2 layers) ----
+  const mindfulnessPaths = useDerivedValue(() => {
+    const p = progress.value;
+    const paths: { path: ReturnType<typeof Skia.Path.Make>; opacity: number }[] = [];
+
+    // Center seed (always visible from start)
+    const seed = Skia.Path.Make();
+    seed.addCircle(cx, cy, 8);
+    paths.push({ path: seed, opacity: Math.min(p * 10, 1) });
+
+    // Inner ring of 4 petals — appears 0–0.3
+    if (p > 0.05) {
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const reveal = Math.min((p - 0.05) / 0.25, 1);
+        const petal = buildLotusPetal(cx, cy, 20, angle, 30 * reveal, 12);
+        paths.push({ path: petal, opacity: reveal * 0.85 });
+      }
+    }
+
+    // Outer ring of 8 petals — appears 0.3–0.7
+    if (p > 0.3) {
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const reveal = Math.min((p - 0.3) / 0.4, 1);
+        const petal = buildLotusPetal(cx, cy, 45, angle, 45 * reveal, 16);
+        paths.push({ path: petal, opacity: reveal * 0.65 });
+      }
+    }
+
+    // Outer circle border — appears 0.7–1.0
+    if (p > 0.7) {
+      const ring = Skia.Path.Make();
+      const reveal = Math.min((p - 0.7) / 0.3, 1);
+      ring.addCircle(cx, cy, 90 * reveal + 5);
+      paths.push({ path: ring, opacity: reveal * 0.4 });
+    }
+
+    return paths;
+  });
+
+  // ---- YOGA NIDRA: Concentric ripples ----
+  const yogaNidraPaths = useDerivedValue(() => {
+    const p = progress.value;
+    const paths: { r: number; opacity: number }[] = [];
+    const ringCount = 8;
+    for (let i = 0; i < ringCount; i++) {
+      const threshold = i / ringCount;
+      if (p > threshold) {
+        const reveal = Math.min((p - threshold) / (1 / ringCount), 1);
+        paths.push({
+          r: 20 + i * 14,
+          opacity: reveal * (0.6 - i * 0.06),
+        });
+      }
+    }
+    return paths;
+  });
+
+  // ---- VIPASSANA: Geometric — hexagons and triangles ----
+  const vipassanaPaths = useDerivedValue(() => {
+    const p = progress.value;
+    const paths: { path: ReturnType<typeof Skia.Path.Make>; opacity: number }[] = [];
+
+    // Center triangle
+    if (p > 0) {
+      const tri = Skia.Path.Make();
+      const triSize = 25 * Math.min(p * 5, 1);
+      tri.moveTo(cx, cy - triSize);
+      tri.lineTo(cx + triSize * 0.866, cy + triSize * 0.5);
+      tri.lineTo(cx - triSize * 0.866, cy + triSize * 0.5);
+      tri.close();
+      paths.push({ path: tri, opacity: Math.min(p * 5, 1) * 0.8 });
+    }
+
+    // Hexagon at 0.2
+    if (p > 0.2) {
+      const hex = Skia.Path.Make();
+      const hexR = 50 * Math.min((p - 0.2) / 0.3, 1);
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 - Math.PI / 6;
+        const x = cx + hexR * Math.cos(angle);
+        const y = cy + hexR * Math.sin(angle);
+        if (i === 0) hex.moveTo(x, y);
+        else hex.lineTo(x, y);
+      }
+      hex.close();
+      paths.push({ path: hex, opacity: Math.min((p - 0.2) / 0.3, 1) * 0.5 });
+    }
+
+    // Outer star of David at 0.5
+    if (p > 0.5) {
+      const star = Skia.Path.Make();
+      const starR = 90 * Math.min((p - 0.5) / 0.5, 1);
+      // Two overlapping triangles
+      for (let tri = 0; tri < 2; tri++) {
+        const offset = tri * (Math.PI / 3);
+        for (let i = 0; i < 3; i++) {
+          const angle = (i / 3) * Math.PI * 2 + offset;
+          const x = cx + starR * Math.cos(angle);
+          const y = cy + starR * Math.sin(angle);
+          if (i === 0) star.moveTo(x, y);
+          else star.lineTo(x, y);
+        }
+        star.close();
+      }
+      paths.push({ path: star, opacity: Math.min((p - 0.5) / 0.5, 1) * 0.35 });
+    }
+
+    return paths;
+  });
+
+  const renderMandala = () => {
+    const type = meditationType ?? 'mindfulness';
+
+    if (type === 'yoga-nidra') {
+      return (
+        <>
+          {yogaNidraPaths.value.map((ring, i) => (
+            <Circle
+              key={i}
+              cx={cx} cy={cy} r={ring.r}
+              color={theme.primary}
+              opacity={ring.opacity}
+              style="stroke"
+              strokeWidth={1.5}
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (type === 'vipassana') {
+      return (
+        <>
+          {vipassanaPaths.value.map((item, i) => (
+            <Path
+              key={i}
+              path={item.path}
+              color={theme.textMuted}
+              opacity={item.opacity}
+              style="stroke"
+              strokeWidth={1}
+            />
+          ))}
+        </>
+      );
+    }
+
+    // Default: mindfulness lotus
+    return (
+      <>
+        {mindfulnessPaths.value.map((item, i) => (
+          <Path
+            key={i}
+            path={item.path}
+            color={theme.primary}
+            opacity={item.opacity}
+            style={i === 0 ? 'fill' : 'stroke'}
+            strokeWidth={1.5}
+          />
+        ))}
+      </>
+    );
+  };
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Canvas style={{ width: size, height: size }}>
+        {renderMandala()}
+      </Canvas>
+    </View>
+  );
+}
+```
+
+**Important:** Wire up `progressShared` from your `useTimer` hook in meditation session, same as you did for pomodoro. Meditation sessions are timer-based too — `progressShared.value = 1 - (secondsLeft / totalSeconds)`.
+
+#### Step 3: Trataka — The Full-Screen Flame
+
+First install expo-brightness (it's part of Expo SDK 56, no native config needed in managed workflow):
+
+```bash
+npx expo install expo-brightness
+```
+
+Create `components/meditation/TratakaFlame.tsx`:
+
+```typescript
+// components/meditation/TratakaFlame.tsx
+import React, { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { Canvas, Path, Oval, Skia, Group } from '@shopify/react-native-skia';
+import { useSharedValue, withRepeat, withSequence, withTiming,
+         useDerivedValue, useEffect as useReanimatedEffect } from 'react-native-reanimated';
+import * as Brightness from 'expo-brightness';
+
+interface TratakaFlameProps {
+  isActive: boolean;
+}
+
+export default function TratakaFlame({ isActive }: TratakaFlameProps) {
+  // Restore brightness on unmount
+  useEffect(() => {
+    let originalBrightness = 0.5;
+    if (isActive) {
+      Brightness.getBrightnessAsync().then((b) => {
+        originalBrightness = b;
+        Brightness.setBrightnessAsync(0.8);
+      });
+    }
+    return () => {
+      Brightness.setBrightnessAsync(originalBrightness);
+    };
+  }, [isActive]);
+
+  // Flame oscillation — x sway
+  const sway = useSharedValue(0);
+  // Flame height oscillation
+  const heightOsc = useSharedValue(1);
+  // Flicker (fast, subtle)
+  const flicker = useSharedValue(1);
+
+  useReanimatedEffect(() => {
+    // Slow sway left-right
+    sway.value = withRepeat(
+      withSequence(
+        withTiming(-6, { duration: 1200 }),
+        withTiming(6, { duration: 900 }),
+        withTiming(-3, { duration: 1500 }),
+        withTiming(4, { duration: 800 }),
+      ),
+      -1, false,
+    );
+
+    // Height breathes
+    heightOsc.value = withRepeat(
+      withSequence(
+        withTiming(1.08, { duration: 2000 }),
+        withTiming(0.94, { duration: 1800 }),
+        withTiming(1.04, { duration: 2200 }),
+      ),
+      -1, false,
+    );
+
+    // Flicker
+    flicker.value = withRepeat(
+      withSequence(
+        withTiming(0.97, { duration: 80 }),
+        withTiming(1.0, { duration: 120 }),
+        withTiming(0.96, { duration: 60 }),
+        withTiming(1.0, { duration: 200 }),
+      ),
+      -1, false,
+    );
+  }, []);
+
+  const CANVAS_W = 200;
+  const CANVAS_H = 340;
+  const BASE_X = CANVAS_W / 2;
+  const BASE_Y = CANVAS_H - 40; // wax pool center
+
+  // Outer halo path (wide, transparent orange)
+  const outerFlamePath = useDerivedValue(() => {
+    const s = sway.value;
+    const h = heightOsc.value * flicker.value;
+    const path = Skia.Path.Make();
+    const tipY = BASE_Y - 160 * h;
+    path.moveTo(BASE_X - 35, BASE_Y);
+    path.cubicTo(
+      BASE_X - 45 + s * 0.5, BASE_Y - 80,
+      BASE_X + s * 1.2, tipY + 20,
+      BASE_X + s, tipY,
+    );
+    path.cubicTo(
+      BASE_X + s * 0.8, tipY + 20,
+      BASE_X + 45 + s * 0.5, BASE_Y - 80,
+      BASE_X + 35, BASE_Y,
+    );
+    path.close();
+    return path;
+  });
+
+  // Middle flame body
+  const midFlamePath = useDerivedValue(() => {
+    const s = sway.value * 0.8;
+    const h = heightOsc.value * flicker.value;
+    const path = Skia.Path.Make();
+    const tipY = BASE_Y - 120 * h;
+    path.moveTo(BASE_X - 20, BASE_Y);
+    path.cubicTo(
+      BASE_X - 28 + s * 0.4, BASE_Y - 60,
+      BASE_X + s,  tipY + 15,
+      BASE_X + s,  tipY,
+    );
+    path.cubicTo(
+      BASE_X + s,  tipY + 15,
+      BASE_X + 28 + s * 0.4, BASE_Y - 60,
+      BASE_X + 20, BASE_Y,
+    );
+    path.close();
+    return path;
+  });
+
+  // Inner bright core
+  const innerFlamePath = useDerivedValue(() => {
+    const s = sway.value * 0.5;
+    const h = heightOsc.value * flicker.value;
+    const path = Skia.Path.Make();
+    const tipY = BASE_Y - 75 * h;
+    path.moveTo(BASE_X - 10, BASE_Y);
+    path.cubicTo(
+      BASE_X - 14 + s * 0.3, BASE_Y - 35,
+      BASE_X + s, tipY + 10,
+      BASE_X + s, tipY,
+    );
+    path.cubicTo(
+      BASE_X + s, tipY + 10,
+      BASE_X + 14 + s * 0.3, BASE_Y - 35,
+      BASE_X + 10, BASE_Y,
+    );
+    path.close();
+    return path;
+  });
+
+  // Wax pool wobble
+  const poolWidth = useDerivedValue(() => 52 + sway.value * 0.3);
+  const poolHeight = useDerivedValue(() => 12 + flicker.value * 1.5);
+
+  return (
+    <View style={styles.container}>
+      <Canvas style={{ width: CANVAS_W, height: CANVAS_H }}>
+        {/* Outer halo — deep orange, transparent */}
+        <Path path={outerFlamePath} color="#FF6B00" opacity={0.25} />
+
+        {/* Middle flame — orange-amber */}
+        <Path path={midFlamePath} color="#FF8C00" opacity={0.70} />
+
+        {/* Inner core — near white-yellow */}
+        <Path path={innerFlamePath} color="#FFF176" opacity={0.95} />
+
+        {/* Wax pool at base */}
+        <Oval
+          rect={{
+            x: BASE_X - 30,
+            y: BASE_Y - 6,
+            width: poolWidth,
+            height: poolHeight,
+          }}
+          color="#FFF9C4"
+          opacity={0.5}
+        />
+      </Canvas>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+```
+
+In `app/(sessions)/meditation/session.tsx`, use Trataka:
+
+```typescript
+import TratakaFlame from '../../components/meditation/TratakaFlame';
+
+// In JSX, when selectedMeditationType is 'trataka':
+{selectedMeditationId === 'trataka' ? (
+  <View style={styles.tratakaContainer}>
+    {/* Pure black background for Trataka */}
+    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000000' }]} />
+    <TratakaFlame isActive={status === 'running'} />
+    <Text style={[styles.tratakaLabel, { color: 'rgba(255,255,255,0.3)' }]}>
+      Fix your gaze gently on the flame
+    </Text>
+  </View>
+) : (
+  // Normal meditation screen with mandala
+  <MandalaView
+    progress={progressShared}
+    meditationType={selectedMeditationId}
+    theme={theme}
+    size={280}
+  />
+)}
+```
+
+Styles:
+```typescript
+tratakaContainer: {
+  flex: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+tratakaLabel: {
+  marginTop: 40,
+  fontSize: 13,
+  letterSpacing: 1,
+  fontFamily: 'DMSans-Regular',
+},
+```
+
+---
+
+### 8B — DEEP WORK SESSION OVERHAUL
+
+#### Step 1: Slowly shifting background hue in `app/(sessions)/focus/session.tsx`
+
+```typescript
+import { useSharedValue, withTiming, useDerivedValue,
+         interpolateColor } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+
+// State + shared values:
+const bgPhase = useSharedValue(0);
+const [sessionDurationSeconds, setSessionDurationSeconds] = useState(0);
+
+// Start background phase animation when session starts:
+useEffect(() => {
+  if (status === 'running' && sessionDurationSeconds > 0) {
+    bgPhase.value = withTiming(1, { duration: sessionDurationSeconds * 1000 });
+  }
+}, [status, sessionDurationSeconds]);
+
+// Derive background color — slowly shifts hue
+// near-black-blue → near-black-green → near-black-purple
+const bgColor = useDerivedValue(() =>
+  interpolateColor(
+    bgPhase.value,
+    [0, 0.5, 1],
+    ['#060A12', '#060C0A', '#0A0612'],
+  )
+);
+
+// Animated background style:
+const bgStyle = useAnimatedStyle(() => ({ backgroundColor: bgColor.value }));
+
+// In JSX — replace your static background View:
+<Animated.View style={[StyleSheet.absoluteFillObject, bgStyle]} />
+```
+
+#### Step 2: The ambient sine wave
+
+Add `components/focus/AmbientWave.tsx`:
+
+```typescript
+// components/focus/AmbientWave.tsx
+import React from 'react';
+import { View } from 'react-native';
+import { Canvas, Path, Skia, useDerivedValue } from '@shopify/react-native-skia';
+import { useSharedValue, withRepeat, withTiming,
+         useEffect as useReanimatedEffect } from 'react-native-reanimated';
+
+interface AmbientWaveProps {
+  width: number;
+  color: string;
+}
+
+export default function AmbientWave({ width, color }: AmbientWaveProps) {
+  const CANVAS_H = 80;
+  const wavePhase = useSharedValue(0);
+  const amplitude = useSharedValue(8);
+
+  useReanimatedEffect(() => {
+    // Phase scrolls continuously
+    wavePhase.value = withRepeat(
+      withTiming(Math.PI * 2, { duration: 4000 }),
+      -1, false,
+    );
+
+    // Amplitude breathes on a 4-second cycle
+    amplitude.value = withRepeat(
+      withTiming(14, { duration: 4000 }),
+      -1, true, // reverse = true for back-and-forth
+    );
+  }, []);
+
+  const wavePath = useDerivedValue(() => {
+    const path = Skia.Path.Make();
+    const steps = 80;
+    const stepW = width / steps;
+    const baseY = CANVAS_H / 2;
+
+    path.moveTo(0, baseY);
+    for (let i = 1; i <= steps; i++) {
+      const x = i * stepW;
+      const y = baseY + amplitude.value * Math.sin(wavePhase.value + (i / steps) * Math.PI * 4);
+      path.lineTo(x, y);
+    }
+    return path;
+  });
+
+  return (
+    <View pointerEvents="none" style={{ width, height: CANVAS_H }}>
+      <Canvas style={{ width, height: CANVAS_H }}>
+        <Path
+          path={wavePath}
+          color={color}
+          opacity={0.10}
+          style="stroke"
+          strokeWidth={1.5}
+        />
+      </Canvas>
+    </View>
+  );
+}
+```
+
+In `app/(sessions)/focus/session.tsx`:
+```typescript
+import AmbientWave from '../../components/focus/AmbientWave';
+import { useWindowDimensions } from 'react-native';
+
+const { width } = useWindowDimensions();
+
+// In JSX, positioned at the bottom of the screen:
+<View style={styles.waveContainer}>
+  <AmbientWave width={width} color={theme.text} />
+</View>
+```
+
+Add style:
+```typescript
+waveContainer: {
+  position: 'absolute',
+  bottom: 0,
+  left: 0, right: 0,
+},
+```
+
+#### Step 3: Deep Work timer typography upgrade
+
+Replace the timer display in `app/(sessions)/focus/session.tsx`:
+
+```typescript
+// Remove any ring/circle timer in focus/deep work sessions.
+// The focus session is just: background + time + wave.
+// Elegant timer:
+<View style={styles.timerBlock}>
+  {intention ? (
+    <Text style={[styles.intentionWatermark, { color: theme.text, fontFamily: 'CormorantGaramond-Italic' }]}>
+      {intention}
+    </Text>
+  ) : null}
+  <Text style={[styles.focusTime, { color: theme.text, fontFamily: 'CormorantGaramond-Light' }]}>
+    {formatTime(secondsLeft)}
+  </Text>
+  <Text style={[styles.focusPhase, { color: theme.textMuted }]}>
+    DEEP WORK
+  </Text>
+</View>
+```
+
+Styles:
+```typescript
+timerBlock: {
+  flex: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
+  position: 'relative',
+},
+intentionWatermark: {
+  position: 'absolute',
+  fontSize: 28,
+  opacity: 0.07,
+  textAlign: 'center',
+  width: '85%',
+  lineHeight: 36,
+},
+focusTime: {
+  fontSize: 72,
+  letterSpacing: -2,
+},
+focusPhase: {
+  fontSize: 11,
+  letterSpacing: 5,
+  marginTop: 8,
+  fontFamily: 'DMSans-Regular',
+},
+```
+
+#### Step 4: Protect the Session (Deep Work)
+
+In `app/(sessions)/focus/session.tsx`, same pattern as Pomodoro:
+
+```typescript
+// Add same beforeRemove listener and exit overlay as Sprint 7B Step 6.
+// The overlay message changes for deep work:
+// "You've been focused for X minutes. This focus is rare."
+// Buttons: "Keep going" (primary) vs "End session" (muted text, small)
+```
+
+#### Step 5: Flow Completion Ceremony
+
+In `app/(sessions)/focus/session.tsx`:
+
+```typescript
+const [showCompletion, setShowCompletion] = useState(false);
+const completionBgOpacity = useSharedValue(0);
+const textOpacity = useSharedValue(0);
+const [completionCountdown, setCompletionCountdown] = useState(5);
+const [accomplishment, setAccomplishment] = useState('');
+
+// Detect natural session completion (not user-cancelled):
+useEffect(() => {
+  if (status === 'complete' && !showCompletion) {
+    setShowCompletion(true);
+
+    // Animate background and text in
+    completionBgOpacity.value = withTiming(1, { duration: 2000 });
+    textOpacity.value = withSequence(
+      withTiming(0, { duration: 0 }),
+      withTiming(1, { duration: 1000 }),
+    );
+
+    // 5-second countdown
+    const interval = setInterval(() => {
+      setCompletionCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(interval);
+          router.replace('/');
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }
+}, [status]);
+
+const completionBgStyle = useAnimatedStyle(() => ({
+  opacity: completionBgOpacity.value,
+  backgroundColor: theme.background,
+}));
+const completionTextStyle = useAnimatedStyle(() => ({
+  opacity: textOpacity.value,
+}));
+
+// Completion overlay JSX:
+{showCompletion && (
+  <Animated.View style={[StyleSheet.absoluteFillObject, completionBgStyle, styles.completionScreen]}>
+    <Animated.View style={[completionTextStyle, styles.completionContent]}>
+      {/* Sanskrit concept for deep work */}
+      <Text style={[styles.sankritTerm, { color: theme.primary, fontFamily: 'CormorantGaramond-Italic' }]}>
+        Dharaṇā
+      </Text>
+      <Text style={[styles.sankritSub, { color: theme.textMuted }]}>
+        Sustained concentration
+      </Text>
+
+      {/* Session stats */}
+      <Text style={[styles.completionDuration, { color: theme.text, fontFamily: 'CormorantGaramond-Light' }]}>
+        {Math.floor(totalSessionMinutes)} minutes
+      </Text>
+      <Text style={[styles.completionRegion, { color: theme.textMuted }]}>
+        {activeThemeName}
+      </Text>
+
+      {/* Optional log input */}
+      <TextInput
+        style={[styles.accomplishmentInput, {
+          color: theme.text,
+          borderBottomColor: theme.cardBorder,
+          fontFamily: 'DMSans-Regular',
+        }]}
+        placeholder="What did you accomplish?"
+        placeholderTextColor={theme.textMuted}
+        value={accomplishment}
+        onChangeText={setAccomplishment}
+        onSubmitEditing={() => {
+          // Save to AsyncStorage for history
+          if (accomplishment.trim()) {
+            saveAccomplishmentNote(accomplishment.trim(), totalSessionMinutes);
+          }
+          router.replace('/');
+        }}
+        returnKeyType="done"
+        maxLength={120}
+      />
+
+      <TouchableOpacity onPress={() => router.replace('/')}>
+        <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 20 }}>
+          Continuing in {completionCountdown}s · tap to return
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  </Animated.View>
+)}
+```
+
+Styles:
+```typescript
+completionScreen: {
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 200,
+},
+completionContent: {
+  alignItems: 'center',
+  paddingHorizontal: 32,
+  width: '100%',
+},
+sankritTerm: {
+  fontSize: 48,
+  letterSpacing: 2,
+},
+sankritSub: {
+  fontSize: 14,
+  letterSpacing: 2,
+  marginBottom: 40,
+},
+completionDuration: {
+  fontSize: 56,
+  letterSpacing: -1,
+},
+completionRegion: {
+  fontSize: 13,
+  letterSpacing: 3,
+  textTransform: 'uppercase',
+  marginTop: 4,
+  marginBottom: 32,
+},
+accomplishmentInput: {
+  width: '100%',
+  borderBottomWidth: 1,
+  paddingVertical: 12,
+  fontSize: 16,
+  textAlign: 'center',
+  marginTop: 24,
+},
+```
+
+### Sprint 8 — APK Checkpoint
+
+- [ ] Meditation session screen: timer hidden by default
+- [ ] Tapping screen toggles timer visibility
+- [ ] Hint text "Tap to reveal timer" fades in after 2 seconds for first-time users
+- [ ] Hint doesn't appear again after first discovery
+- [ ] Mandala appears and incrementally grows with progress
+- [ ] Mindfulness type shows lotus petals progressively revealed
+- [ ] Yoga Nidra shows concentric ripples
+- [ ] Vipassana shows geometric triangles/hexagon
+- [ ] Trataka type shows full-screen flame with wax pool
+- [ ] Trataka: screen brightness increases to 80% on session start, restores on end
+- [ ] Deep Work session: background very slowly shifts hue over session
+- [ ] Sine wave animation visible at bottom of deep work session, 10% opacity
+- [ ] Intention appears as faint watermark
+- [ ] Flow completion ceremony appears with "Dharaṇā" on natural completion
+- [ ] Accomplishment text input present and functional on completion screen
+
+---
+
+## SPRINT 9 — AUDIO POLISH + HAPTIC RHYTHM
+
+**Duration: ~5 days**
+
+---
+
+### 9A — UI MICRO-SOUNDS
+
+#### Step 1: Add SFX files
+
+Download free sounds from Freesound.org or Mixkit. Files to add to `assets/audio/sfx/`:
+- `sfx-region-select.mp3` — soft padded tap (~0.3s)
+- `sfx-session-begin.mp3` — Tibetan bowl, 3s with fade
+- `sfx-phase-transition.mp3` — barely audible chime (~0.5s)
+- `sfx-session-end.mp3` — singing bowl, 5s fade
+- `sfx-streak-milestone.mp3` — 2-3 ascending bells (~2s)
+- `sfx-badge-earned.mp3` — two-note ascending chime (~0.8s)
+
+**Freesound.org search terms:** "tibetan bowl single", "soft chime notification", "temple bell ascending"  
+**Mixkit:** https://mixkit.co/free-sound-effects/notification/ (free with attribution or CC0)
+
+#### Step 2: Expand `hooks/useAudio.ts`
+
+In the `useSFX()` hook, add the new sounds:
+
+```typescript
+// In the SFX_TRACKS record (alongside your existing ones):
+const SFX_TRACKS = {
+  // EXISTING:
+  'ding-soft':       require('../assets/audio/sfx/ding-soft.mp3'),
+  'singing-bowl':    require('../assets/audio/sfx/singing-bowl.mp3'),
+  'breath-complete': require('../assets/audio/sfx/breath-complete.mp3'),
+
+  // NEW (S9):
+  'region-select':   require('../assets/audio/sfx/sfx-region-select.mp3'),
+  'session-begin':   require('../assets/audio/sfx/sfx-session-begin.mp3'),
+  'phase-transition':require('../assets/audio/sfx/sfx-phase-transition.mp3'),
+  'session-end':     require('../assets/audio/sfx/sfx-session-end.mp3'),
+  'streak-milestone':require('../assets/audio/sfx/sfx-streak-milestone.mp3'),
+  'badge-earned':    require('../assets/audio/sfx/sfx-badge-earned.mp3'),
+};
+
+// Expand useSFX() return value:
+export function useSFX() {
+  const { sfxVolume } = useSettings();
+
+  const play = async (trackKey: keyof typeof SFX_TRACKS, volumeMultiplier = 1.0) => {
+    if (sfxVolume === 0) return;
+    try {
+      const { sound } = await Audio.Sound.createAsync(SFX_TRACKS[trackKey]);
+      await sound.setVolumeAsync(sfxVolume * volumeMultiplier);
+      await sound.playAsync();
+      // Auto-unload after playback to prevent memory leak
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (e) {
+      // Fail silently — SFX is enhancement, not critical
+    }
+  };
+
+  return {
+    // Existing:
+    playDing:         () => play('ding-soft'),
+    playSingingBowl:  () => play('singing-bowl'),
+    playBreathDone:   () => play('breath-complete'),
+
+    // New S9:
+    playRegionSelect:   () => play('region-select'),
+    playSessionBegin:   () => play('session-begin'),
+    playPhaseTransition:() => play('phase-transition', 0.4), // 40% volume — subtle
+    playSessionEnd:     () => play('session-end'),
+    playStreakMilestone:() => play('streak-milestone'),
+    playBadgeEarned:    () => play('badge-earned'),
+  };
+}
+```
+
+**Note on expo-audio API:** The exact API depends on your `expo-audio` version (~56.0.11). If you're using the newer `expo-audio` (not the older `expo-av`), the API is:
+```typescript
+import { useAudioPlayer } from 'expo-audio';
+// OR for one-shot SFX, use Audio.Sound from expo-av which is still available in SDK 56.
+// Check your import: if you import from 'expo-audio', use its API; if 'expo-av', use Audio.Sound.
+// The pattern above uses expo-av's Audio.Sound.createAsync which works in SDK 56.
+```
+
+#### Step 3: Wire SFX to trigger points
+
+**In `components/home/ThemeSelector.tsx`** — add region select sound:
+```typescript
+const { playRegionSelect } = useSFX();
+
+// In the onPress handler for each theme card:
+onPress={() => {
+  hapticLight();
+  playRegionSelect(); // ← ADD
+  setTheme(theme.id);
+}}
+```
+
+**In each session.tsx** — add session begin sound on mount:
+```typescript
+const { playSessionBegin, playSessionEnd } = useSFX();
+
+// On session mount (once):
+useEffect(() => {
+  const timer = setTimeout(() => {
+    playSessionBegin();
+  }, 300); // slight delay after nav completes
+  return () => clearTimeout(timer);
+}, []);
+
+// On completion screen appear:
+useEffect(() => {
+  if (showCompletion) {
+    playSessionEnd();
+  }
+}, [showCompletion]);
+```
+
+**In `hooks/useBreathing.ts`** — add phase transition sound:
+```typescript
+// In the phase-change event handler (where you already fire haptics):
+// You need to call playPhaseTransition() here.
+// Since hooks can't call other hooks, you need to pass it as a callback:
+
+// In the hook signature:
+interface UseBreathingOptions {
+  pattern: BreathingPattern;
+  onPhaseChange?: (newPhase: string) => void; // ← ADD
+}
+
+// In the phase-change logic:
+if (onPhaseChange) onPhaseChange(nextPhase.name);
+
+// In the session component:
+const { playPhaseTransition } = useSFX();
+const breathing = useBreathing({
+  pattern: selectedPattern,
+  onPhaseChange: (phase) => {
+    playPhaseTransition();
+  },
+});
+```
+
+---
+
+### 9B — HAPTIC RHYTHM FOR BREATHING
+
+#### Complete hapticUtils.ts upgrade
+
+Replace `utils/hapticUtils.ts`:
+
+```typescript
+// utils/hapticUtils.ts
+import * as Haptics from 'expo-haptics';
+import { useSettingsStore } from '../store/settingsStore';
+
+// Get enabled state without hook (for use in non-component contexts)
+function isHapticsEnabled(): boolean {
+  return useSettingsStore.getState().hapticsEnabled;
+}
+
+export async function hapticLight() {
+  if (!isHapticsEnabled()) return;
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+}
+
+export async function hapticMedium() {
+  if (!isHapticsEnabled()) return;
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+}
+
+export async function hapticHeavy() {
+  if (!isHapticsEnabled()) return;
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+}
+
+export async function hapticSuccess() {
+  if (!isHapticsEnabled()) return;
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+}
+
+export async function hapticWarning() {
+  if (!isHapticsEnabled()) return;
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+}
+
+// NEW S9: Rising sequence — "begin" feeling
+export async function hapticRisingSequence() {
+  if (!isHapticsEnabled()) return;
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  await new Promise(r => setTimeout(r, 80));
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  await new Promise(r => setTimeout(r, 80));
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+}
+
+// NEW S9: Single firm — "stay" feeling
+export async function hapticSingleFirm() {
+  if (!isHapticsEnabled()) return;
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+}
+
+// NEW S9: Phase-specific haptic for breathing
+// Call with the phase name that is STARTING
+export async function hapticForBreathingPhase(phase: string) {
+  if (!isHapticsEnabled()) return;
+  switch (phase) {
+    case 'inhale':
+      await hapticRisingSequence(); // "Begin"
+      break;
+    case 'holdIn':
+      await hapticSingleFirm();    // "Stay here"
+      break;
+    case 'exhale':
+      await hapticLight();          // "Release" — gentle
+      break;
+    case 'holdOut':
+      // Almost nothing — barely-there tap
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      break;
+    default:
+      break;
+  }
+}
+```
+
+In `hooks/useBreathing.ts`, replace the existing haptic call in the phase-change handler:
+
+```typescript
+import { hapticForBreathingPhase, hapticSuccess } from '../utils/hapticUtils';
+
+// In phase change (replace your existing haptic call):
+// Old: hapticLight()
+// New:
+hapticForBreathingPhase(nextPhase.name);
+
+// Cycle complete still uses:
+hapticSuccess();
+```
+
+---
+
+### 9C — VERIFY AUDIO CONTINUITY ACROSS SESSIONS
+
+**The expected behavior:** Ambient audio plays on home screen, keeps playing when user navigates into a session, and the session adds binaural audio on top.
+
+**Verify this in `components/audio/AudioManager.tsx`:**
+```typescript
+// AudioManager should be mounted in app/index.tsx (home screen)
+// It should NOT be mounted in session screens
+// The audio continues because home screen stays in the React Navigation stack
+// (sessions are pushed on top, home is not unmounted)
+
+// In AudioManager, make sure you're not stopping audio on unmount if session is active:
+useEffect(() => {
+  return () => {
+    // Only stop if navigating away from home AND no session is active
+    const { isSessionActive } = useAppStore.getState();
+    if (!isSessionActive && ambientSound) {
+      ambientSound.stopAsync();
+    }
+  };
+}, []);
+```
+
+**Session binaural audio setup** — in each session screen, add binaural start/stop:
+```typescript
+// In breathing/pomodoro/meditation/focus session.tsx:
+const { startBinaural, stopBinaural } = useBinauralAudio();
+
+// Start on session begin:
+useEffect(() => {
+  if (status === 'running') {
+    // Map session type to binaural frequency:
+    // breathing → alpha (10hz, calm-alert)
+    // pomodoro/focus → alpha (10hz, focus)
+    // meditation → theta (6hz, meditation)
+    startBinaural('alpha'); // or 'theta' for meditation
+  }
+}, [status]);
+
+// Stop on session end/unmount:
+useEffect(() => {
+  return () => {
+    stopBinaural();
+  };
+}, []);
+```
+
+### Sprint 9 — APK Checkpoint
+
+- [ ] Tapping a region card plays a soft padded sound
+- [ ] Entering any session plays the Tibetan bowl strike (with ~300ms delay)
+- [ ] Each breathing phase transition plays a very subtle chime (40% volume)
+- [ ] Session completion screen appears with singing bowl sound
+- [ ] Breathing phases trigger different haptic patterns: rising for inhale, firm for holdIn, gentle for exhale, barely-there for holdOut
+- [ ] Cycle complete triggers success haptic (double-tap)
+- [ ] Ambient audio (home screen) continues playing into session screens without gap or restart
+- [ ] Binaural audio starts when session begins (layered on top of ambient)
+- [ ] Binaural stops when session ends/user navigates away
+
+
+# 💎 FLOWSOME DIAMOND GUIDE — PART 3
+## Sprint 10: Gamification · Sprint 11: Onboarding · Sprint 12: Culture · Sprint 13: Polish
+
+---
+
+## SPRINT 10 — GAMIFICATION (STREAK + MALA + STATS)
+
+**Duration: ~10 days · The retention engine.**
+
+---
+
+### 10A — SESSION HISTORY PERSISTENCE
+
+#### Step 1: Create `store/historyStore.ts` — new Zustand persisted store
+
+```typescript
+// store/historyStore.ts
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export interface SessionRecord {
+  id: string;                    // unique: timestamp string
+  completedAt: string;           // ISO date string
+  type: 'breathing' | 'meditation' | 'focus' | 'pomodoro';
+  durationMinutes: number;
+  theme: string;                 // e.g. 'rajasthan'
+  practiceId: string | null;     // e.g. 'box-breathing', 'mindfulness'
+  intention: string | null;
+  moodBefore: number | null;     // 1-5
+  moodAfter: number | null;      // 1-5
+  accomplishmentNote: string | null;
+}
+
+interface HistoryState {
+  sessions: SessionRecord[];
+  earnedBadgeIds: string[];
+  
+  // Actions
+  addSession: (record: Omit<SessionRecord, 'id' | 'completedAt'>) => void;
+  awardBadge: (badgeId: string) => void;
+  
+  // Derived (computed on demand — don't store, compute)
+  getStreak: () => number;
+  getTotalSessions: () => number;
+  getTotalMinutes: () => number;
+  getMalaProgress: () => number;  // 0–107
+  getSessionsForTheme: (theme: string) => number;
+}
+
+export const useHistoryStore = create<HistoryState>()(
+  persist(
+    (set, get) => ({
+      sessions: [],
+      earnedBadgeIds: [],
+
+      addSession: (record) => {
+        const newRecord: SessionRecord = {
+          ...record,
+          id: Date.now().toString(),
+          completedAt: new Date().toISOString(),
+        };
+        set((s) => ({ sessions: [newRecord, ...s.sessions] }));
+      },
+
+      awardBadge: (badgeId) => {
+        const already = get().earnedBadgeIds.includes(badgeId);
+        if (!already) {
+          set((s) => ({ earnedBadgeIds: [...s.earnedBadgeIds, badgeId] }));
+        }
+      },
+
+      getStreak: () => {
+        const { sessions } = get();
+        if (sessions.length === 0) return 0;
+
+        // Get unique calendar days with sessions, sorted descending
+        const days = new Set(
+          sessions.map((s) => s.completedAt.substring(0, 10)) // YYYY-MM-DD
+        );
+        const sortedDays = Array.from(days).sort().reverse();
+
+        const today = new Date().toISOString().substring(0, 10);
+        const yesterday = new Date(Date.now() - 86400000).toISOString().substring(0, 10);
+
+        // Streak only counts if today OR yesterday has a session
+        if (sortedDays[0] !== today && sortedDays[0] !== yesterday) return 0;
+
+        let streak = 0;
+        let checkDate = new Date(sortedDays[0]);
+
+        for (const day of sortedDays) {
+          const dayDate = new Date(day);
+          const diffMs = checkDate.getTime() - dayDate.getTime();
+          const diffDays = Math.round(diffMs / 86400000);
+          if (diffDays > 1) break;
+          streak++;
+          checkDate = dayDate;
+        }
+        return streak;
+      },
+
+      getTotalSessions: () => get().sessions.length,
+      getTotalMinutes: () => get().sessions.reduce((sum, s) => sum + s.durationMinutes, 0),
+      getMalaProgress: () => get().sessions.length % 108,
+      getSessionsForTheme: (theme) =>
+        get().sessions.filter((s) => s.theme === theme).length,
+    }),
+    {
+      name: 'flowsome:history',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);
+```
+
+#### Step 2: Wire session completion to history in every session.tsx
+
+Add to the completion effect in **each** session file (breathing, pomodoro, meditation, focus):
+
+```typescript
+import { useHistoryStore } from '../../store/historyStore';
+import { checkAndAwardBadges } from '../../utils/achievementUtils'; // created in 10D
+
+// In completion handler:
+const addSession = useHistoryStore((s) => s.addSession);
+const awardBadge = useHistoryStore((s) => s.awardBadge);
+
+// When session completes naturally:
+useEffect(() => {
+  if (status === 'complete') {
+    // 1. Save to history
+    addSession({
+      type: 'breathing', // or 'meditation' / 'focus' / 'pomodoro'
+      durationMinutes: Math.floor(totalSessionSeconds / 60),
+      theme: activeTheme,
+      practiceId: selectedPatternId, // or selectedMeditationId etc.
+      intention: intention ?? null,
+      moodBefore: null, // set if you collect it pre-session
+      moodAfter: moodAfter ?? null,
+      accomplishmentNote: accomplishment ?? null,
+    });
+
+    // 2. Check for new badges
+    checkAndAwardBadges(awardBadge, showBadgeToast);
+  }
+}, [status]);
+```
+
+---
+
+### 10B — STREAK SYSTEM (DIYA DESIGN)
+
+#### Create `components/home/StreakIndicator.tsx`
+
+```typescript
+// components/home/StreakIndicator.tsx
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import Animated, { useSharedValue, withSpring, useAnimatedStyle,
+                   withSequence, withTiming } from 'react-native-reanimated';
+import { useHistoryStore } from '../../store/historyStore';
+
+interface StreakIndicatorProps {
+  theme: { primary: string; text: string; textMuted: string };
+}
+
+export default function StreakIndicator({ theme }: StreakIndicatorProps) {
+  const getStreak = useHistoryStore((s) => s.getStreak);
+  const streak = getStreak();
+  
+  const scale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.0);
+
+  // Pulse animation on mount if streak > 0
+  useEffect(() => {
+    if (streak > 0) {
+      scale.value = withSequence(
+        withSpring(1.2, { damping: 5 }),
+        withSpring(1.0),
+      );
+      glowOpacity.value = withTiming(0.5 + Math.min(streak / 30, 0.4), { duration: 800 });
+    }
+  }, [streak]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  // Diya emoji based on streak tier
+  const getDiyaEmoji = () => {
+    if (streak === 0)  return '🪔'; // unlit (dim)
+    if (streak < 7)    return '🪔';
+    if (streak < 30)   return '🏮';
+    return '✨';
+  };
+
+  const getGlowColor = () => {
+    if (streak === 0)  return 'transparent';
+    if (streak < 7)    return '#F59E0B';
+    if (streak < 30)   return '#F97316';
+    return '#FBBF24';
+  };
+
+  if (streak === 0) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Text style={{ fontSize: 16, opacity: 0.35 }}>🪔</Text>
+      </View>
+    );
+  }
+
+  return (
+    <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: 6 }, animStyle]}>
+      {/* Glow halo behind diya */}
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            width: 32, height: 32,
+            borderRadius: 16,
+            backgroundColor: getGlowColor(),
+          },
+          glowStyle,
+        ]}
+        pointerEvents="none"
+      />
+      <Text style={{ fontSize: 18, zIndex: 1 }}>{getDiyaEmoji()}</Text>
+      <Text style={{ fontSize: 13, color: theme.text, fontFamily: 'DMSans-Medium', zIndex: 1 }}>
+        {streak}
+      </Text>
+    </Animated.View>
+  );
+}
+```
+
+In `app/index.tsx`, add to the header:
+```typescript
+import StreakIndicator from '../components/home/StreakIndicator';
+
+// In header row (alongside settings icon):
+<View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+  <StreakIndicator theme={theme} />
+  <TouchableOpacity onPress={() => router.push('/settings')}>
+    {/* existing settings icon */}
+  </TouchableOpacity>
+</View>
+```
+
+---
+
+### 10C — THE MALA COUNTER
+
+#### Create `components/home/MalaIndicator.tsx`
+
+```typescript
+// components/home/MalaIndicator.tsx
+import React from 'react';
+import { View } from 'react-native';
+import { Canvas, Circle } from '@shopify/react-native-skia';
+import { useHistoryStore } from '../../store/historyStore';
+
+interface MalaIndicatorProps {
+  width: number;   // screen width
+  theme: { primary: string; cardBorder: string };
+}
+
+export default function MalaIndicator({ width, theme }: MalaIndicatorProps) {
+  const getMalaProgress = useHistoryStore((s) => s.getMalaProgress);
+  const litBeads = getMalaProgress(); // 0–107
+
+  const BEAD_COUNT = 108;
+  const CANVAS_H = 40;
+  const canvasW = width;
+
+  // Arrange 108 beads along a shallow arc at the bottom
+  // Arc spans full width, gentle curve, beads evenly distributed
+  const beads = Array(BEAD_COUNT).fill(0).map((_, i) => {
+    const t = i / (BEAD_COUNT - 1); // 0 to 1 across the arc
+    const x = 16 + t * (canvasW - 32);
+    // Gentle sine curve — arc dips 6px at center
+    const y = CANVAS_H / 2 + Math.sin(t * Math.PI) * 6;
+    return { x, y, lit: i < litBeads };
+  });
+
+  return (
+    <View style={{ width: canvasW, height: CANVAS_H }} pointerEvents="none">
+      <Canvas style={{ width: canvasW, height: CANVAS_H }}>
+        {beads.map((bead, i) => (
+          <Circle
+            key={i}
+            cx={bead.x}
+            cy={bead.y}
+            r={bead.lit ? 2.2 : 1.6}
+            color={bead.lit ? theme.primary : theme.cardBorder}
+            opacity={bead.lit ? 0.9 : 0.25}
+          />
+        ))}
+      </Canvas>
+    </View>
+  );
+}
+```
+
+In `app/index.tsx`, add at the very bottom of the screen (above safe area):
+```typescript
+import MalaIndicator from '../components/home/MalaIndicator';
+import { useWindowDimensions } from 'react-native';
+
+const { width } = useWindowDimensions();
+
+// In JSX, as last child before closing root View:
+<View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+  <MalaIndicator width={width} theme={theme} />
+</View>
+```
+
+---
+
+### 10D — ACHIEVEMENT BADGES
+
+#### Create `constants/achievements.ts`
+
+```typescript
+// constants/achievements.ts
+export interface Achievement {
+  id: string;
+  title: string;
+  titleHindi: string;
+  description: string;
+  icon: string;
+  checkCondition: (stats: AchievementStats) => boolean;
+}
+
+export interface AchievementStats {
+  totalSessions: number;
+  streak: number;
+  sessionsByTheme: Record<string, number>;
+  sessionsByType: Record<string, number>;
+  totalMinutes: number;
+  hasCompletedDeepWork90: boolean;
+  hasCompletedMeditation30: boolean;
+  morningSessionCount: number;   // sessions before 7am
+  nightSessionCount: number;     // sessions after 10pm
+  breathingSessions: number;
+}
+
+export const ACHIEVEMENTS: Achievement[] = [
+  {
+    id: 'first-breath',
+    title: 'First Breath',
+    titleHindi: 'पहली साँस',
+    description: 'Complete your first breathing session',
+    icon: '🌬️',
+    checkCondition: (s) => s.sessionsByType['breathing'] >= 1,
+  },
+  {
+    id: 'first-focus',
+    title: 'First Focus',
+    titleHindi: 'पहला ध्यान',
+    description: 'Complete your first pomodoro session',
+    icon: '⏱️',
+    checkCondition: (s) => s.sessionsByType['pomodoro'] >= 1,
+  },
+  {
+    id: 'sadhaka',
+    title: 'Sādhaka (साधक)',
+    titleHindi: 'साधक',
+    description: '7-day practice streak',
+    icon: '🙏',
+    checkCondition: (s) => s.streak >= 7,
+  },
+  {
+    id: 'desert-walker',
+    title: 'Desert Walker',
+    titleHindi: 'मरुस्थल यात्री',
+    description: '10 sessions in Rajasthan',
+    icon: '🏜️',
+    checkCondition: (s) => (s.sessionsByTheme['rajasthan'] ?? 0) >= 10,
+  },
+  {
+    id: 'snow-silence',
+    title: 'Snow Silence',
+    titleHindi: 'हिम मौन',
+    description: '10 sessions in Himalaya',
+    icon: '🏔️',
+    checkCondition: (s) => (s.sessionsByTheme['himalaya'] ?? 0) >= 10,
+  },
+  {
+    id: 'backwater-still',
+    title: 'Backwater Still',
+    titleHindi: 'केरल शांति',
+    description: '10 sessions in Kerala',
+    icon: '🌴',
+    checkCondition: (s) => (s.sessionsByTheme['kerala'] ?? 0) >= 10,
+  },
+  {
+    id: 'first-mala',
+    title: 'First Mala',
+    titleHindi: 'प्रथम माला',
+    description: '108 total sessions completed',
+    icon: '📿',
+    checkCondition: (s) => s.totalSessions >= 108,
+  },
+  {
+    id: 'dawn-keeper',
+    title: 'Dawn Keeper',
+    titleHindi: 'उषा पालक',
+    description: '10 sessions before 7am',
+    icon: '🌅',
+    checkCondition: (s) => s.morningSessionCount >= 10,
+  },
+  {
+    id: 'night-owl',
+    title: 'Night Owl',
+    titleHindi: 'रात्रि उल्लू',
+    description: '10 sessions after 10pm',
+    icon: '🦉',
+    checkCondition: (s) => s.nightSessionCount >= 10,
+  },
+  {
+    id: 'dharana',
+    title: 'Dharaṇā',
+    titleHindi: 'धारणा',
+    description: 'Complete a 90-minute Deep Work session',
+    icon: '🧠',
+    checkCondition: (s) => s.hasCompletedDeepWork90,
+  },
+  {
+    id: 'mauna',
+    title: 'Mauna (मौन)',
+    titleHindi: 'मौन',
+    description: 'Complete a 30-minute silent meditation',
+    icon: '🤫',
+    checkCondition: (s) => s.hasCompletedMeditation30,
+  },
+  {
+    id: 'pranavaka',
+    title: 'Prāṇavaka',
+    titleHindi: 'प्राणवक',
+    description: '50 breathing sessions completed',
+    icon: '🫁',
+    checkCondition: (s) => s.breathingSessions >= 50,
+  },
+];
+```
+
+#### Create `utils/achievementUtils.ts`
+
+```typescript
+// utils/achievementUtils.ts
+import { ACHIEVEMENTS } from '../constants/achievements';
+import type { AchievementStats } from '../constants/achievements';
+import { useHistoryStore } from '../store/historyStore';
+
+// Compute current stats from history store (call after every session)
+export function computeAchievementStats(): AchievementStats {
+  const store = useHistoryStore.getState();
+  const { sessions } = store;
+
+  const sessionsByTheme: Record<string, number> = {};
+  const sessionsByType: Record<string, number> = {};
+  let morningCount = 0;
+  let nightCount = 0;
+
+  for (const session of sessions) {
+    // By theme
+    sessionsByTheme[session.theme] = (sessionsByTheme[session.theme] ?? 0) + 1;
+    // By type
+    sessionsByType[session.type] = (sessionsByType[session.type] ?? 0) + 1;
+    // Time of day
+    const hour = new Date(session.completedAt).getHours();
+    if (hour < 7) morningCount++;
+    if (hour >= 22) nightCount++;
+  }
+
+  const hasCompletedDeepWork90 = sessions.some(
+    (s) => s.type === 'focus' && s.durationMinutes >= 90
+  );
+  const hasCompletedMeditation30 = sessions.some(
+    (s) => s.type === 'meditation' && s.durationMinutes >= 30
+  );
+
+  return {
+    totalSessions: sessions.length,
+    streak: store.getStreak(),
+    sessionsByTheme,
+    sessionsByType,
+    totalMinutes: store.getTotalMinutes(),
+    hasCompletedDeepWork90,
+    hasCompletedMeditation30,
+    morningSessionCount: morningCount,
+    nightSessionCount: nightCount,
+    breathingSessions: sessionsByType['breathing'] ?? 0,
+  };
+}
+
+// Check all unearned badges and award newly qualifying ones.
+// showToast callback is passed from the screen component.
+export function checkAndAwardBadges(
+  awardBadge: (id: string) => void,
+  showToast: (badge: typeof ACHIEVEMENTS[0]) => void,
+) {
+  const { earnedBadgeIds } = useHistoryStore.getState();
+  const stats = computeAchievementStats();
+
+  for (const achievement of ACHIEVEMENTS) {
+    if (earnedBadgeIds.includes(achievement.id)) continue;
+    if (achievement.checkCondition(stats)) {
+      awardBadge(achievement.id);
+      showToast(achievement);
+    }
+  }
+}
+```
+
+#### Create `components/achievements/BadgeToast.tsx`
+
+```typescript
+// components/achievements/BadgeToast.tsx
+import React, { useEffect } from 'react';
+import { View, Text } from 'react-native';
+import Animated, { useSharedValue, withTiming, withSequence,
+                   useAnimatedStyle } from 'react-native-reanimated';
+
+interface Achievement {
+  icon: string;
+  title: string;
+  description: string;
+}
+
+interface BadgeToastProps {
+  badge: Achievement | null;
+  theme: { background: string; text: string; textMuted: string; primary: string; cardBorder: string };
+}
+
+export default function BadgeToast({ badge, theme }: BadgeToastProps) {
+  const translateY = useSharedValue(80);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (badge) {
+      translateY.value = withSequence(
+        withTiming(0, { duration: 350 }),
+        withTiming(0, { duration: 2800 }), // hold
+        withTiming(80, { duration: 350 }),
+      );
+      opacity.value = withSequence(
+        withTiming(1, { duration: 350 }),
+        withTiming(1, { duration: 2800 }),
+        withTiming(0, { duration: 350 }),
+      );
+    }
+  }, [badge]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: opacity.value,
+  }));
+
+  if (!badge) return null;
+
+  return (
+    <Animated.View
+      style={[
+        animStyle,
+        {
+          position: 'absolute',
+          bottom: 90,
+          left: 20, right: 20,
+          backgroundColor: theme.background,
+          borderColor: theme.cardBorder,
+          borderWidth: 1,
+          borderRadius: 16,
+          padding: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          shadowColor: theme.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
+          elevation: 8,
+          zIndex: 999,
+        },
+      ]}
+      pointerEvents="none"
+    >
+      <Text style={{ fontSize: 28 }}>{badge.icon}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: theme.text, fontFamily: 'DMSans-Medium', fontSize: 15 }}>
+          {badge.title}
+        </Text>
+        <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
+          {badge.description}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+```
+
+#### Wire BadgeToast into home screen and each session screen
+
+In `app/index.tsx` (and optionally each session screen):
+```typescript
+import BadgeToast from '../components/achievements/BadgeToast';
+import type { Achievement } from '../constants/achievements';
+
+const [pendingBadge, setPendingBadge] = useState<Achievement | null>(null);
+
+const showBadgeToast = useCallback((badge: Achievement) => {
+  setPendingBadge(badge);
+  playBadgeEarned(); // SFX
+  // Clear after animation duration
+  setTimeout(() => setPendingBadge(null), 4000);
+}, []);
+
+// In JSX:
+<BadgeToast badge={pendingBadge} theme={theme} />
+```
+
+---
+
+### 10E — BASIC STATS SCREEN
+
+#### Create `app/(screens)/stats.tsx`
+
+First create the folder: `app/(screens)/` 
+
+Then `stats.tsx`:
+```typescript
+// app/(screens)/stats.tsx
+import React from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
+import { useTheme } from '../../hooks/useTheme';
+import { useHistoryStore } from '../../store/historyStore';
+import { SafeScreen } from '../../components/ui/SafeScreen';
+import HeatmapCalendar from '../../components/stats/HeatmapCalendar';
+import { FlowText } from '../../components/ui/FlowText';
+
+export default function StatsScreen() {
+  const theme = useTheme();
+  const store = useHistoryStore();
+  
+  const totalSessions = store.getTotalSessions();
+  const totalMinutes = store.getTotalMinutes();
+  const streak = store.getStreak();
+  const malaProgress = store.getMalaProgress();
+
+  // Favorite theme
+  const themeCountMap: Record<string, number> = {};
+  for (const s of store.sessions) {
+    themeCountMap[s.theme] = (themeCountMap[s.theme] ?? 0) + 1;
+  }
+  const favoriteTheme = Object.entries(themeCountMap)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+
+  return (
+    <SafeScreen>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.container, { paddingBottom: 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Text style={{ color: theme.textMuted, fontSize: 24 }}>←</Text>
+          </TouchableOpacity>
+          <FlowText variant="heading" size="xl" color={theme.text}>
+            Your Practice
+          </FlowText>
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* Summary stats row */}
+        <View style={[styles.statsRow, { borderColor: theme.cardBorder }]}>
+          <StatBox label="Sessions" value={totalSessions.toString()} theme={theme} />
+          <StatBox label="Minutes" value={totalMinutes.toString()} theme={theme} />
+          <StatBox label="Streak" value={`${streak}d 🪔`} theme={theme} />
+          <StatBox label="Favourite" value={favoriteTheme} theme={theme} />
+        </View>
+
+        {/* Heatmap */}
+        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>
+          365 DAYS
+        </Text>
+        <HeatmapCalendar sessions={store.sessions} theme={theme} />
+
+        {/* Mala progress */}
+        <Text style={[styles.sectionLabel, { color: theme.textMuted, marginTop: 24 }]}>
+          MALA PROGRESS — BEAD {malaProgress}/108
+        </Text>
+        <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
+          {108 - malaProgress} sessions until next mala completes
+        </Text>
+      </ScrollView>
+    </SafeScreen>
+  );
+}
+
+function StatBox({ label, value, theme }: { label: string; value: string; theme: any }) {
+  return (
+    <View style={styles.statBox}>
+      <Text style={{ color: theme.text, fontSize: 18, fontFamily: 'DMSans-Medium' }}>
+        {value}
+      </Text>
+      <Text style={{ color: theme.textMuted, fontSize: 10, marginTop: 2, letterSpacing: 1 }}>
+        {label.toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 20 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  statsRow: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 16,
+    marginBottom: 24,
+    overflow: 'hidden',
+  },
+  statBox: {
+    flex: 1,
+    padding: 16,
+    alignItems: 'center',
+  },
+  sectionLabel: {
+    fontSize: 11,
+    letterSpacing: 2,
+    fontFamily: 'DMSans-Medium',
+    marginBottom: 12,
+  },
+});
+```
+
+#### Create `components/stats/HeatmapCalendar.tsx`
+
+```typescript
+// components/stats/HeatmapCalendar.tsx
+import React, { useMemo } from 'react';
+import { View, useWindowDimensions } from 'react-native';
+import { Canvas, RoundedRect } from '@shopify/react-native-skia';
+import type { SessionRecord } from '../../store/historyStore';
+
+const THEME_COLORS: Record<string, string> = {
+  rajasthan: '#F59E0B',
+  himalaya: '#60A5FA',
+  kerala:   '#34D399',
+  assam:    '#A3E635',
+  andaman:  '#38BDF8',
+};
+
+interface HeatmapCalendarProps {
+  sessions: SessionRecord[];
+  theme: { cardBorder: string; background: string; text: string };
+}
+
+export default function HeatmapCalendar({ sessions, theme }: HeatmapCalendarProps) {
+  const { width } = useWindowDimensions();
+  const COLS = 53; // weeks
+  const ROWS = 7;  // days of week
+  const CELL = Math.floor((width - 40) / COLS);
+  const GAP = 1;
+  const CANVAS_W = COLS * (CELL + GAP);
+  const CANVAS_H = ROWS * (CELL + GAP);
+
+  // Build a map of date → { totalMinutes, dominantTheme }
+  const heatmap = useMemo(() => {
+    const map: Record<string, { minutes: number; theme: string }> = {};
+    for (const session of sessions) {
+      const day = session.completedAt.substring(0, 10);
+      if (!map[day]) map[day] = { minutes: 0, theme: session.theme };
+      map[day].minutes += session.durationMinutes;
+      // Keep the theme with most minutes (first occurrence wins for simplicity)
+    }
+    return map;
+  }, [sessions]);
+
+  // Build 53×7 grid of cells. Start from 52 weeks ago (364 days + today).
+  const cells = useMemo(() => {
+    const today = new Date();
+    const cells: { date: string; col: number; row: number }[] = [];
+    // Start date: 52 full weeks before today's day-of-week
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 364);
+    // Align to Sunday
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+
+    for (let col = 0; col < COLS; col++) {
+      for (let row = 0; row < ROWS; row++) {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + col * 7 + row);
+        cells.push({
+          date: d.toISOString().substring(0, 10),
+          col,
+          row,
+        });
+      }
+    }
+    return cells;
+  }, []);
+
+  return (
+    <View style={{ width: CANVAS_W, height: CANVAS_H }}>
+      <Canvas style={{ width: CANVAS_W, height: CANVAS_H }}>
+        {cells.map((cell, i) => {
+          const data = heatmap[cell.date];
+          const minutes = data?.minutes ?? 0;
+          const themeColor = data ? (THEME_COLORS[data.theme] ?? '#6366F1') : 'transparent';
+
+          // Intensity 0–1 from minutes
+          const intensity = Math.min(minutes / 60, 1);
+          // Mix theme color at intensity over base border color
+          const opacity = minutes === 0 ? 0 : 0.15 + intensity * 0.85;
+
+          return (
+            <RoundedRect
+              key={i}
+              x={cell.col * (CELL + GAP)}
+              y={cell.row * (CELL + GAP)}
+              width={CELL}
+              height={CELL}
+              r={1.5}
+              color={minutes === 0 ? theme.cardBorder : themeColor}
+              opacity={minutes === 0 ? 0.15 : opacity}
+            />
+          );
+        })}
+      </Canvas>
+    </View>
+  );
+}
+```
+
+Add a stats button to the home screen header:
+```typescript
+// In app/index.tsx header:
+<TouchableOpacity onPress={() => router.push('/(screens)/stats')}>
+  <Text style={{ color: theme.textMuted, fontSize: 22 }}>📊</Text>
+</TouchableOpacity>
+```
+
+### Sprint 10 — APK Checkpoint
+
+- [ ] Each session completion writes a record to historyStore
+- [ ] Streak number shows correctly in home screen header diya
+- [ ] Diya animates (scale spring) when app opens with active streak
+- [ ] 108 mala beads visible at bottom of home screen
+- [ ] Lit beads match total sessions count mod 108
+- [ ] First Breath badge awards after completing first breathing session
+- [ ] Badge toast slides up from bottom with icon and description
+- [ ] Stats screen accessible from home screen 📊 button
+- [ ] Stats screen shows total sessions, total minutes, streak, favourite theme
+- [ ] Heatmap calendar renders 53×7 grid with colour-coded cells
+
+---
+
+## SPRINT 11 — ONBOARDING + HOME INTERACTIONS
+
+**Duration: ~7 days**
+
+---
+
+### 11A — FIRST-RUN ONBOARDING
+
+#### Add `hasCompletedOnboarding` to settingsStore
+
+In `store/settingsStore.ts`, add one field:
+```typescript
+interface SettingsState {
+  // ...existing fields...
+  hasCompletedOnboarding: boolean;
+  setOnboardingComplete: () => void;
+}
+
+// In create():
+hasCompletedOnboarding: false,
+setOnboardingComplete: () => set({ hasCompletedOnboarding: true }),
+```
+
+#### Create `app/onboarding.tsx`
+
+```typescript
+// app/onboarding.tsx
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated,
+         Dimensions } from 'react-native';
+import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import ParticleCanvas from '../components/particles/ParticleCanvas';
+import { useAppStore } from '../store/appStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { useTheme } from '../hooks/useTheme';
+import { THEMES, THEME_ORDER } from '../constants/themes';
+import { hapticLight } from '../utils/hapticUtils';
+
+type Step = 'welcome' | 'region-quiz' | 'first-breath';
+
+const QUIZ_THEMES = ['rajasthan', 'himalaya', 'andaman'] as const;
+
+export default function OnboardingScreen() {
+  const [step, setStep] = useState<Step>('welcome');
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const theme = useTheme();
+  const setTheme = useAppStore((s) => s.setTheme);
+  const setOnboardingComplete = useSettingsStore((s) => s.setOnboardingComplete);
+
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const taglineOpacity = useRef(new Animated.Value(0)).current;
+
+  // Animate welcome screen elements in
+  React.useEffect(() => {
+    if (step === 'welcome') {
+      Animated.sequence([
+        Animated.timing(titleOpacity, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(taglineOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ]).start();
+
+      // Auto-advance after 3.5 seconds
+      const timer = setTimeout(() => setStep('region-quiz'), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
+
+  const handleRegionSelect = (regionId: string) => {
+    hapticLight();
+    setSelectedRegion(regionId);
+    setTheme(regionId as any);
+  };
+
+  const handleBeginFirstBreath = () => {
+    setOnboardingComplete();
+    // Navigate directly to breathing session with Box Breathing pre-selected
+    // Set the pattern in sessionStore first:
+    const { useSessionStore } = require('../store/sessionStore');
+    useSessionStore.getState().setSelectedPattern('box-breathing');
+    router.replace('/(sessions)/breathing/session');
+  };
+
+  // --- STEP 1: Welcome ---
+  if (step === 'welcome') {
+    return (
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        onPress={() => setStep('region-quiz')}
+        activeOpacity={1}
+      >
+        <LinearGradient
+          colors={[theme.gradientStart, theme.gradientEnd]}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <ParticleCanvas />
+
+        <View style={styles.welcomeContent}>
+          <Animated.Text
+            style={[styles.wordmark, { color: theme.text, opacity: titleOpacity }]}
+          >
+            Flowsome
+          </Animated.Text>
+          <Animated.Text
+            style={[styles.tagline, { color: theme.textMuted, opacity: taglineOpacity }]}
+          >
+            India's wellness, in your hands
+          </Animated.Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  // --- STEP 2: Region Quiz ---
+  if (step === 'region-quiz') {
+    return (
+      <View style={[styles.screen, { backgroundColor: theme.background }]}>
+        <ParticleCanvas />
+
+        <View style={styles.quizContent}>
+          <Text style={[styles.quizQuestion, { color: theme.text }]}>
+            Where do you find your stillness?
+          </Text>
+
+          <View style={styles.regionCards}>
+            {QUIZ_THEMES.map((id) => {
+              const config = THEMES[id];
+              const isSelected = selectedRegion === id;
+              return (
+                <TouchableOpacity
+                  key={id}
+                  style={[
+                    styles.regionCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: isSelected ? theme.primary : theme.cardBorder,
+                      borderWidth: isSelected ? 2 : 1,
+                    },
+                  ]}
+                  onPress={() => handleRegionSelect(id)}
+                >
+                  <Text style={{ fontSize: 32 }}>{config.icon}</Text>
+                  <Text style={[styles.regionName, { color: theme.text }]}>
+                    {config.name}
+                  </Text>
+                  <Text style={[styles.regionTagline, { color: theme.textMuted }]}>
+                    {config.tagline}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {selectedRegion && (
+            <View style={styles.confirmRow}>
+              <Text style={[styles.confirmText, { color: theme.textMuted }]}>
+                {THEMES[selectedRegion]?.name ?? ''} has been waiting for you.
+              </Text>
+              <TouchableOpacity
+                style={[styles.nextBtn, { backgroundColor: theme.primary }]}
+                onPress={() => setStep('first-breath')}
+              >
+                <Text style={[styles.nextBtnText, { color: theme.background }]}>
+                  Continue →
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  // --- STEP 3: First Practice ---
+  return (
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <ParticleCanvas />
+      <View style={styles.practiceContent}>
+        <Text style={[styles.practiceTitle, { color: theme.text }]}>
+          One breath{'\n'}before we begin?
+        </Text>
+        <Text style={[styles.practiceSubtitle, { color: theme.textMuted }]}>
+          Box breathing · 3 cycles · ~1 minute
+        </Text>
+        <TouchableOpacity
+          style={[styles.beginBtn, { backgroundColor: theme.primary }]}
+          onPress={handleBeginFirstBreath}
+        >
+          <Text style={[styles.beginBtnText, { color: theme.background }]}>
+            Begin
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const { width } = Dimensions.get('window');
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  welcomeContent: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+  },
+  wordmark: {
+    fontSize: 52, fontFamily: 'CormorantGaramond-Medium', letterSpacing: 3,
+  },
+  tagline: {
+    fontSize: 16, marginTop: 16, fontFamily: 'DMSans-Regular', letterSpacing: 1,
+  },
+  quizContent: {
+    flex: 1, paddingHorizontal: 24, justifyContent: 'center',
+  },
+  quizQuestion: {
+    fontSize: 26, fontFamily: 'CormorantGaramond-Medium',
+    textAlign: 'center', marginBottom: 32, lineHeight: 34,
+  },
+  regionCards: {
+    gap: 12,
+  },
+  regionCard: {
+    borderRadius: 16, padding: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 16,
+  },
+  regionName: {
+    fontSize: 18, fontFamily: 'DMSans-Medium',
+  },
+  regionTagline: {
+    fontSize: 12, fontFamily: 'DMSans-Regular', marginTop: 2,
+  },
+  confirmRow: {
+    marginTop: 24, alignItems: 'center', gap: 16,
+  },
+  confirmText: {
+    fontSize: 15, fontFamily: 'CormorantGaramond-Italic', textAlign: 'center',
+  },
+  nextBtn: {
+    paddingHorizontal: 40, paddingVertical: 14, borderRadius: 12,
+  },
+  nextBtnText: {
+    fontSize: 16, fontFamily: 'DMSans-Medium',
+  },
+  practiceContent: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32,
+  },
+  practiceTitle: {
+    fontSize: 40, fontFamily: 'CormorantGaramond-Medium',
+    textAlign: 'center', lineHeight: 50, marginBottom: 16,
+  },
+  practiceSubtitle: {
+    fontSize: 14, fontFamily: 'DMSans-Regular', letterSpacing: 1, marginBottom: 48,
+  },
+  beginBtn: {
+    paddingHorizontal: 64, paddingVertical: 18, borderRadius: 12,
+  },
+  beginBtnText: {
+    fontSize: 20, fontFamily: 'DMSans-Medium', letterSpacing: 1,
+  },
+});
+```
+
+#### Wire onboarding into root layout
+
+In `app/_layout.tsx`:
+```typescript
+import { useSettingsStore } from '../store/settingsStore';
+
+// Inside the root layout's content render:
+const hasCompletedOnboarding = useSettingsStore((s) => s.hasCompletedOnboarding);
+
+// In your Stack navigator:
+<Stack>
+  {!hasCompletedOnboarding ? (
+    <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+  ) : null}
+  <Stack.Screen name="index" options={{ headerShown: false }} />
+  {/* ...rest of your screens */}
+</Stack>
+
+// Also, in the root layout's navigation logic, redirect to onboarding if needed:
+useEffect(() => {
+  if (fontsLoaded && !hasCompletedOnboarding) {
+    router.replace('/onboarding');
+  }
+}, [fontsLoaded, hasCompletedOnboarding]);
+```
+
+---
+
+### 11B — DAILY CONTEXTUAL GREETING
+
+#### Create `utils/greetingUtils.ts`
+
+```typescript
+// utils/greetingUtils.ts
+export interface GreetingResult {
+  line: string;
+  lineHindi: string;
+}
+
+const GREETINGS: Array<{
+  hours: [number, number]; // from (inclusive), to (exclusive)
+  line: string;
+  lineHindi: string;
+}> = [
+  { hours: [5, 9],   line: 'Brahma muhurta — the creator\'s hour.',   lineHindi: 'ब्रह्म मुहूर्त — सृष्टिकर्ता का समय।' },
+  { hours: [9, 12],  line: 'Morning flow awaits.',                    lineHindi: 'प्रातः प्रवाह आपकी प्रतीक्षा में है।' },
+  { hours: [12, 15], line: 'Midday reset. 5 minutes now saves hours.',lineHindi: 'मध्याह्न विश्राम। पाँच मिनट काफी हैं।' },
+  { hours: [15, 18], line: 'Afternoon energy. A breath is enough.',   lineHindi: 'अपराह्न ऊर्जा। एक साँस पर्याप्त है।' },
+  { hours: [18, 21], line: 'Golden hour. Sandhyavandanam time.',      lineHindi: 'सुनहरा समय। संध्यावंदन का वक्त।' },
+  { hours: [21, 29], line: 'Let the day dissolve.',                   lineHindi: 'दिन को विसर्जित होने दें।' }, // 29 covers 21–4am
+];
+
+export function getTimeGreeting(streakDays = 0): GreetingResult {
+  const hour = new Date().getHours();
+  const normalizedHour = hour < 5 ? hour + 24 : hour;
+
+  const match = GREETINGS.find(
+    ([from, to]) => normalizedHour >= from && normalizedHour < to,
+  ) ?? GREETINGS[GREETINGS.length - 1];
+
+  // ↑ The destructuring pattern here should use the object:
+  const entry = GREETINGS.find(
+    (g) => normalizedHour >= g.hours[0] && normalizedHour < g.hours[1],
+  ) ?? GREETINGS[GREETINGS.length - 1];
+
+  const streakSuffix = streakDays > 0 ? ` · Day ${streakDays} 🪔` : '';
+  return {
+    line: entry.line + streakSuffix,
+    lineHindi: entry.lineHindi,
+  };
+}
+```
+
+#### Add greeting to `app/index.tsx`
+
+```typescript
+import { getTimeGreeting } from '../utils/greetingUtils';
+import { useEffect, useState, useRef } from 'react';
+import Animated, { useSharedValue, withSequence, withTiming,
+                   useAnimatedStyle } from 'react-native-reanimated';
+
+// State:
+const [greeting, setGreeting] = useState(() => {
+  const streak = useHistoryStore.getState().getStreak();
+  return getTimeGreeting(streak);
+});
+const greetingOpacity = useSharedValue(0);
+
+// Animate greeting on mount, auto-hide after 2.5 seconds:
+useEffect(() => {
+  greetingOpacity.value = withSequence(
+    withTiming(1, { duration: 500 }),
+    withTiming(1, { duration: 1800 }),
+    withTiming(0, { duration: 400 }),
+  );
+}, []);
+
+const greetingStyle = useAnimatedStyle(() => ({
+  opacity: greetingOpacity.value,
+}));
+
+// In JSX, below the header and above ThemeSelector:
+<Animated.View style={[styles.greetingContainer, greetingStyle]} pointerEvents="none">
+  <Text style={[styles.greetingText, { color: theme.textMuted, fontFamily: 'CormorantGaramond-Italic' }]}>
+    {greeting.line}
+  </Text>
+</Animated.View>
+```
+
+Style:
+```typescript
+greetingContainer: {
+  alignItems: 'center',
+  paddingHorizontal: 24,
+  marginBottom: 4,
+  height: 24,
+},
+greetingText: {
+  fontSize: 14,
+  textAlign: 'center',
+  letterSpacing: 0.5,
+},
+```
+
+### Sprint 11 — APK Checkpoint
+
+- [ ] First launch goes to onboarding (not home)
+- [ ] Welcome screen shows wordmark + particles, auto-advances after 3.5s
+- [ ] Region quiz shows 3 region cards; tapping one changes background particles instantly
+- [ ] "Has been waiting for you" confirmation text appears after selection
+- [ ] First practice screen offers box breathing; tapping "Begin" goes directly to session
+- [ ] After first session completes: returns to home, first badge shows, mala progress = 1
+- [ ] Subsequent launches go directly to home (onboarding not shown again)
+- [ ] Time-based greeting fades in at top of home screen, disappears after 2.5 seconds
+- [ ] Greeting includes day number if streak > 0
+
+---
+
+## SPRINT 12 — CULTURAL DEPTH + WISDOM SYSTEM
+
+**Duration: ~7 days**
+
+---
+
+### 12A — EXPAND THE WISDOM SYSTEM
+
+#### Expand `constants/quotes.ts` structure
+
+Replace/extend your existing quotes.ts with this richer structure:
+
+```typescript
+// constants/quotes.ts
+export interface Quote {
+  id: string;
+  text: string;
+  textHindi?: string;
+  attribution: string;
+  tradition: string;
+  region: string;          // 'rajasthan' | 'himalaya' | 'kerala' | 'assam' | 'andaman' | 'all'
+  practiceTag: string;     // 'breathing' | 'meditation' | 'focus' | 'flow' | 'general'
+  moodTag: string;         // 'restless' | 'calm' | 'motivated' | 'tired' | 'curious'
+}
+
+export const QUOTES: Quote[] = [
+  {
+    id: 'q1',
+    text: 'The forest does not hurry, yet everything is accomplished.',
+    textHindi: 'जंगल जल्दी नहीं करता, फिर भी सब कुछ पूरा हो जाता है।',
+    attribution: 'Lao Tzu',
+    tradition: 'Taoist',
+    region: 'assam',
+    practiceTag: 'focus',
+    moodTag: 'restless',
+  },
+  {
+    id: 'q2',
+    text: 'Breath is the bridge which connects life to consciousness.',
+    textHindi: 'श्वास वह सेतु है जो जीवन को चेतना से जोड़ती है।',
+    attribution: 'Thich Nhat Hanh',
+    tradition: 'Buddhist',
+    region: 'all',
+    practiceTag: 'breathing',
+    moodTag: 'calm',
+  },
+  {
+    id: 'q3',
+    text: 'Be like the lotus: trust in the light, grow through the dirt, believe in new beginnings.',
+    attribution: 'Indian Proverb',
+    tradition: 'Hindu',
+    region: 'kerala',
+    practiceTag: 'meditation',
+    moodTag: 'tired',
+  },
+  {
+    id: 'q4',
+    text: 'The mind is everything. What you think, you become.',
+    textHindi: 'मन ही सब कुछ है। जो तुम सोचते हो, वही बन जाते हो।',
+    attribution: 'Gautama Buddha',
+    tradition: 'Buddhist',
+    region: 'all',
+    practiceTag: 'meditation',
+    moodTag: 'motivated',
+  },
+  {
+    id: 'q5',
+    text: 'In the depth of winter, I finally learned that within me there lay an invincible summer.',
+    attribution: 'Albert Camus',
+    tradition: 'Philosophy',
+    region: 'himalaya',
+    practiceTag: 'focus',
+    moodTag: 'tired',
+  },
+  {
+    id: 'q6',
+    text: 'Yoga is the journey of the self, through the self, to the self.',
+    textHindi: 'योग स्वयं की, स्वयं के माध्यम से, स्वयं की ओर यात्रा है।',
+    attribution: 'Bhagavad Gita',
+    tradition: 'Hindu',
+    region: 'all',
+    practiceTag: 'meditation',
+    moodTag: 'curious',
+  },
+  {
+    id: 'q7',
+    text: 'When you realize there is nothing lacking, the whole world belongs to you.',
+    attribution: 'Lao Tzu',
+    tradition: 'Taoist',
+    region: 'andaman',
+    practiceTag: 'general',
+    moodTag: 'restless',
+  },
+  {
+    id: 'q8',
+    text: 'Deep work is the ability to focus without distraction on a cognitively demanding task.',
+    attribution: 'Cal Newport',
+    tradition: 'Modern',
+    region: 'all',
+    practiceTag: 'focus',
+    moodTag: 'motivated',
+  },
+  // Add 40+ total quotes following this structure
+];
+
+// Helper: get quote for current session context
+export function getQuoteForSession(
+  practiceTag: string,
+  theme: string,
+): Quote {
+  const matches = QUOTES.filter(
+    (q) => (q.practiceTag === practiceTag || q.practiceTag === 'general')
+      && (q.region === theme || q.region === 'all'),
+  );
+  if (matches.length === 0) return QUOTES[0];
+  // Rotate by day-of-year for variety without randomness
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000,
+  );
+  return matches[dayOfYear % matches.length];
+}
+```
+
+Show the quote on each session completion screen — add to your completion overlays (S7/S8 completion screens):
+```typescript
+import { getQuoteForSession } from '../../constants/quotes';
+
+// Compute once on completion:
+const completionQuote = useMemo(
+  () => getQuoteForSession('breathing', activeTheme), // adjust type per screen
+  [],
+);
+
+// In completion overlay JSX:
+{completionQuote && (
+  <View style={{ paddingHorizontal: 24, marginTop: 20 }}>
+    <Text style={{
+      color: theme.textMuted,
+      fontSize: 14,
+      fontFamily: 'CormorantGaramond-Italic',
+      textAlign: 'center',
+      lineHeight: 22,
+    }}>
+      "{completionQuote.text}"
+    </Text>
+    <Text style={{ color: theme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+      — {completionQuote.attribution}
+    </Text>
+  </View>
+)}
+```
+
+---
+
+### 12B — SEASONAL AWARENESS
+
+#### Create `utils/seasonUtils.ts`
+
+```typescript
+// utils/seasonUtils.ts
+export interface SeasonInfo {
+  name: string;
+  nameHindi: string;
+  line: string;
+}
+
+const FESTIVALS: Array<{
+  start: [number, number]; // [month 0-indexed, day]
+  end:   [number, number];
+  name: string;
+  line: string;
+}> = [
+  { start: [9, 15], end: [9, 22], name: 'Dussehra',  line: 'Dussehra · Victory of light.' },
+  { start: [9, 29], end: [11, 5], name: 'Diwali',    line: 'Diwali · Light your practice.' },
+  { start: [0, 13], end: [0, 15], name: 'Makar Sankranti', line: 'Sankranti · The sun turns north.' },
+  { start: [1, 25], end: [2, 5],  name: 'Holi',       line: 'Holi · Colour and renewal.' },
+  { start: [8, 19], end: [8, 28], name: 'Navratri',   line: 'Navratri · Nine nights of the divine.' },
+];
+
+const SEASONS = [
+  { months: [2, 3],    name: 'Vasanta', nameHindi: 'वसंत',    line: 'The petals are opening.' },
+  { months: [4, 5],    name: 'Grishma', nameHindi: 'ग्रीष्म',  line: 'The sun teaches endurance.' },
+  { months: [6, 7],    name: 'Varsha',  nameHindi: 'वर्षा',   line: 'The earth is being washed clean.' },
+  { months: [8, 9],    name: 'Sharad',  nameHindi: 'शरद्',    line: 'The harvest of stillness.' },
+  { months: [10, 11],  name: 'Hemanta', nameHindi: 'हेमंत',   line: 'The fog that precedes clarity.' },
+  { months: [0, 1],    name: 'Shishira',nameHindi: 'शिशिर',   line: 'The cold that deepens the root.' },
+];
+
+export function getCurrentSeasonInfo(): SeasonInfo {
+  const now = new Date();
+  const month = now.getMonth();
+  const day = now.getDate();
+
+  // Check festivals first
+  for (const festival of FESTIVALS) {
+    const [sm, sd] = festival.start;
+    const [em, ed] = festival.end;
+    const afterStart = month > sm || (month === sm && day >= sd);
+    const beforeEnd  = month < em || (month === em && day <= ed);
+    if (afterStart && beforeEnd) {
+      return { name: festival.name, nameHindi: '', line: festival.line };
+    }
+  }
+
+  // Fall back to season
+  const season = SEASONS.find((s) => s.months.includes(month)) ?? SEASONS[4];
+  return { name: season.name, nameHindi: season.nameHindi, line: season.line };
+}
+```
+
+In `app/index.tsx`, add seasonal tag under the wordmark:
+```typescript
+import { getCurrentSeasonInfo } from '../utils/seasonUtils';
+
+const seasonInfo = useMemo(() => getCurrentSeasonInfo(), []);
+
+// In header JSX, under/near the app title:
+<Text style={{
+  color: theme.textMuted,
+  fontSize: 10,
+  letterSpacing: 2,
+  fontFamily: 'DMSans-Regular',
+  marginTop: 2,
+  opacity: 0.6,
+}}>
+  {seasonInfo.line.toUpperCase()}
+</Text>
+```
+
+---
+
+### 12C — "NOW PLAYING" SESSION BAR
+
+#### Create `components/session/NowPlayingBar.tsx`
+
+```typescript
+// components/session/NowPlayingBar.tsx
+import React from 'react';
+import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
+import { useAppStore } from '../../store/appStore';
+import { useSessionStore } from '../../store/sessionStore';
+import { useTheme } from '../../hooks/useTheme';
+import { formatTime } from '../../utils/timeUtils';
+
+const SESSION_ROUTES: Record<string, string> = {
+  breathing: '/(sessions)/breathing/session',
+  pomodoro:  '/(sessions)/pomodoro/session',
+  meditation:'/(sessions)/meditation/session',
+  focus:     '/(sessions)/focus/session',
+};
+
+const SESSION_ICONS: Record<string, string> = {
+  breathing: '🌬️',
+  pomodoro:  '⏱️',
+  meditation:'🧘',
+  focus:     '✨',
+};
+
+export default function NowPlayingBar() {
+  const isSessionActive = useAppStore((s) => s.isSessionActive);
+  const activeMode      = useSessionStore((s) => s.activeMode);
+  const secondsRemaining= useSessionStore((s) => s.secondsRemaining);
+  const theme = useTheme();
+
+  if (!isSessionActive || !activeMode) return null;
+
+  return (
+    <TouchableOpacity
+      style={[styles.bar, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+      onPress={() => {
+        const route = SESSION_ROUTES[activeMode];
+        if (route) router.push(route as any);
+      }}
+      activeOpacity={0.85}
+    >
+      <Text style={{ fontSize: 18 }}>{SESSION_ICONS[activeMode] ?? '🌿'}</Text>
+      <Text style={[styles.label, { color: theme.text }]}>
+        {activeMode.charAt(0).toUpperCase() + activeMode.slice(1)} in progress
+      </Text>
+      <Text style={[styles.time, { color: theme.primary }]}>
+        {formatTime(secondsRemaining)}
+      </Text>
+      <Text style={{ color: theme.textMuted, fontSize: 16, marginLeft: 4 }}>›</Text>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderRadius: 0,
+  },
+  label: { flex: 1, fontSize: 14, fontFamily: 'DMSans-Regular' },
+  time:  { fontSize: 14, fontFamily: 'DMSans-Medium' },
+});
+```
+
+In `app/_layout.tsx`, mount it at the root level so it appears on home/settings/stats screens:
+
+```typescript
+import NowPlayingBar from '../components/session/NowPlayingBar';
+
+// In your root layout render, just before closing the Stack:
+<Stack>
+  {/* ...all your screens... */}
+</Stack>
+{/* NowPlayingBar at the bottom of every non-session screen */}
+<NowPlayingBar />
+```
+
+You also need to set `isSessionActive` in appStore correctly:
+```typescript
+// In each session.tsx, on mount:
+useEffect(() => {
+  useAppStore.getState().setSessionActive(true);
+  return () => {
+    useAppStore.getState().setSessionActive(false);
+  };
+}, []);
+```
+
+### Sprint 12 — APK Checkpoint
+
+- [ ] Session completion screens show a relevant quote from the expanded quotes library
+- [ ] Quote attribution shows below the quote
+- [ ] Home screen header shows seasonal tag (e.g., "GRISHMA · THE SUN TEACHES ENDURANCE")
+- [ ] Festival override works — if Diwali window: "DIWALI · LIGHT YOUR PRACTICE" shows
+- [ ] NowPlaying bar appears at bottom of home screen when a session is active
+- [ ] NowPlaying bar shows the session type icon, label, and remaining time
+- [ ] Tapping NowPlaying bar navigates back into the active session
+
+---
+
+## SPRINT 13 — POLISH + DEMO / STORE PREP
+
+**Duration: ~5 days**
+
+---
+
+### 13A — PERFORMANCE AUDIT CHECKLIST
+
+Profile each session screen individually on a physical Android device.
+
+**Setup for profiling:**
+```bash
+# Run in production mode to get realistic performance:
+npx expo run:android --variant release
+# OR build APK with: eas build --profile preview --platform android
+```
+
+**What to check in each screen:**
+
+**Breathing session + full particles + orb:**
+- Open developer menu (shake device in dev mode) → Performance Monitor
+- Should show: 60fps steady, JS thread < 20ms, UI thread < 16ms
+- If particles drop frames: reduce PARTICLE_COUNT from 35 to 20
+- If orb drops frames: verify `useDerivedValue` is used (not `.value` in render)
+
+**Pomodoro with liquid depth meter:**
+- The liquid path computation happens in a worklet — verify it's in `useDerivedValue`
+- If wave is choppy: reduce `steps` in path builder from 60 to 30
+- The 3000ms wave cycle should be smooth — if not, increase duration to 4000ms
+
+**Trataka flame:**
+- 3 flame paths + 1 oval = 4 Skia elements animated
+- Should be 60fps easily. If not: verify all animation drivers use Reanimated worklets
+- The `Oval` component in Skia 2.6.2 — verify it accepts a `rect` prop with `{x,y,width,height}`
+- Alternative if Oval has issues: use `Circle` with non-uniform scale via Group transform
+
+**Mandala:**
+- Static snapshot drawing — no continuous animation, so should be trivially fast
+- The mandala rebuilds on `progress` changes. Verify `useDerivedValue` wraps the path builders
+- If mandala causes stutters: add `React.memo` to the whole `MandalaView` component
+
+**Memory leak check:**
+- Open breathing session → leave it running 5 minutes → return to home → repeat 3x
+- If app becomes noticeably slower: check particle animation cleanup in useEffect return
+- Specifically: all `withRepeat` animations should be cancelled on component unmount
+
+---
+
+### 13B — FINAL BUG SWEEP (Common Expo 56 Issues)
+
+**Issue: RadialGradient in Skia not accepting SharedValue for colors**
+
+Skia's `RadialGradient` in version 2.6.2 may not support `useDerivedValue` for the `colors` array directly. If you see errors, use a workaround:
+
+```typescript
+// Workaround: Use two overlapping circles with different opacities
+// Instead of gradient, manually simulate with:
+<Circle cx={cx} cy={cy} r={orbRadius} color={theme.orb} />
+<Circle cx={cx} cy={cy} r={orbRadius} color={centerColor} opacity={0.7} />
+// centerColor is from useDerivedValue returning static strings
+```
+
+**Issue: `useEffect as useReanimatedEffect` import**
+
+In Reanimated 4.3.1, the import is:
+```typescript
+import { useAnimatedReaction } from 'react-native-reanimated';
+// useEffect from 'react-native-reanimated' is:
+import Animated, { useSharedValue, runOnJS } from 'react-native-reanimated';
+// For starting animations on mount, use the standard pattern:
+// In a regular useEffect, just set .value with withRepeat/withTiming
+```
+
+The `useEffect as useReanimatedEffect` pattern shown in S6/S7 requires Reanimated's own `useEffect`. If it's not exported in your version:
+```typescript
+// Replace:
+// useReanimatedEffect(() => { ... }, []);
+// With standard React useEffect:
+useEffect(() => {
+  animSharedValue.value = withRepeat(withTiming(...), -1, false);
+  return () => {
+    cancelAnimation(animSharedValue);
+  };
+}, []);
+```
+
+**Issue: `expo-brightness` permissions on Android**
+
+`expo-brightness` requires the `WRITE_SETTINGS` permission on Android. In SDK 56 managed workflow, you may need to add to `app.json`:
+```json
+{
+  "expo": {
+    "plugins": [
+      ["expo-brightness", {
+        "requestedPermissions": ["WRITE_SETTINGS"]
+      }]
+    ]
+  }
+}
+```
+Test this: if `setBrightnessAsync` fails silently, catch the error and skip brightness adjustment gracefully — it's enhancement, not critical.
+
+**Issue: `eas build` fails with Skia native code**
+
+If EAS build fails on Skia:
+1. Verify `@shopify/react-native-skia` is exactly `2.6.2` in package.json (not `^2.6.2`)
+2. Check eas.json has `"buildType": "apk"` for preview builds
+3. If using `npx expo prebuild` → verify `android/app/build.gradle` has Skia's CMake config
+
+**Issue: NowPlayingBar flickers when navigating**
+
+If NowPlayingBar disappears briefly during navigation:
+```typescript
+// In _layout.tsx, ensure it renders OUTSIDE the Stack, not inside:
+return (
+  <GestureHandlerRootView style={{ flex: 1 }}>
+    <SafeAreaProvider>
+      <Stack>...</Stack>
+      <NowPlayingBar /> {/* This is outside Stack, stays mounted during nav */}
+    </SafeAreaProvider>
+  </GestureHandlerRootView>
+);
+```
+
+---
+
+### 13C — PLAY STORE PREP CHECKLIST
+
+**app.json — verify before AAB build:**
+```json
+{
+  "expo": {
+    "name": "Flowsome",
+    "slug": "flowsome",
+    "version": "1.0.0",
+    "android": {
+      "versionCode": 1,
+      "package": "com.yourname.flowsome",
+      "permissions": [
+        "VIBRATE",
+        "WAKE_LOCK",
+        "WRITE_SETTINGS"
+      ]
+    }
+  }
+}
+```
+
+**Pre-submission testing checklist:**
+- [ ] Cold start on Android: < 3 seconds to first frame
+- [ ] All 5 themes: particles render correctly in day AND night mode
+- [ ] All 4 sessions: complete a full session in each
+- [ ] Hindi language: toggle in settings, verify all 4 sessions show Hindi labels
+- [ ] Haptics: physical device, not emulator
+- [ ] Audio: test with Bluetooth headphones AND phone speaker
+- [ ] Onboarding: uninstall + reinstall to trigger first-run flow
+- [ ] Streak: set device clock to tomorrow, open app, verify streak still counts
+- [ ] Badge: verify "First Breath" awards on first breathing session
+- [ ] Stats screen: heatmap renders, tapping back works
+- [ ] NowPlaying bar: start session, navigate to home, bar appears
+
+**Screenshots to capture for Play Store:**
+1. Home screen — Rajasthan day, all 5 session cards visible, streak diya in corner
+2. Home screen — Himalaya night mode (dramatic)
+3. Breathing session — orb in inhale state, particles visible, phase label visible
+4. Trataka flame — full screen, flame visible
+5. Pomodoro — liquid depth meter at ~60% fill
+6. Stats screen — heatmap calendar with data
+
+**Short description (80 chars max):**
+```
+India-rooted wellness: breathe, focus, meditate with regional soul.
+```
+
+**Full description:**
+```
+Flowsome brings the soul of India to your daily wellness practice.
+
+FIVE REGIONAL EXPERIENCES
+Choose your landscape: Rajasthan's desert silence, the Himalayan peaks, 
+Kerala's backwaters, Assam's forests, or the Andaman sea. Each region 
+brings its own ambient sound, particle ambience, and color palette.
+
+FOUR CORE PRACTICES
+• Breathe — Box breathing, 4-7-8, Nadi Shodhana with guided visual orb
+• Focus — Pomodoro timer with liquid depth meter
+• Meditate — Mandala progression, Trataka candle meditation, guided sessions
+• Flow — Deep work with ceremonial completion ritual
+
+CRAFTED FOR INDIA
+• Bilingual: English and Hindi throughout
+• Indian seasonal calendar awareness
+• Cultural wisdom from Bhagavad Gita, Buddhist texts, and Indian tradition
+• Day/Night mode for morning and evening practice
+
+NO SUBSCRIPTION. NO ADS.
+Flowsome is yours completely — premium features for life, free.
+
+Practice daily. Watch the diya grow.
+```
+
+---
+
+## 💎 FINAL DEPENDENCY ADDITIONS SUMMARY
+
+Run these before starting S8 (Trataka) and S11 (gyroscope, if you add it):
+
+```bash
+# Trataka screen brightness (managed workflow, SDK 56 compatible):
+npx expo install expo-brightness
+
+# Gyroscope for home screen parallax (S11C — optional enhancement):
+npx expo install expo-sensors
+
+# Share card capture (S13, if you build share cards):
+npx expo install react-native-view-shot expo-sharing
+```
+
+All four are Expo SDK 56 managed workflow compatible — no ejecting required, no native config beyond app.json plugins for brightness.
+
+---
+
+## 💎 QUICK REFERENCE: FILE TOUCH MAP PER SPRINT
+
+| Sprint | Files Created | Files Modified |
+|--------|--------------|----------------|
+| S6 | — | `ParticleCanvas.tsx`, all 4 particle files |
+| S7A | — | `BreathingOrb.tsx`, `BreathingPhaseLabel.tsx`, `session.tsx` (breathing), `themes.ts` |
+| S7B | — | `CircularTimer.tsx`, `session.tsx` (pomodoro), `useTimer.ts` |
+| S8A | `MandalaView.tsx` | `session.tsx` (meditation) |
+| S8B | `TratakaFlame.tsx`, `AmbientWave.tsx` | `session.tsx` (focus) |
+| S9A | 6 new SFX files | `useAudio.ts`, `ThemeSelector.tsx`, all 4 `session.tsx` |
+| S9B | — | `hapticUtils.ts`, `useBreathing.ts` |
+| S10A | `historyStore.ts`, `achievementUtils.ts` | all 4 `session.tsx` |
+| S10B | `StreakIndicator.tsx` | `index.tsx` (home) |
+| S10C | `MalaIndicator.tsx` | `index.tsx` (home) |
+| S10D | `achievements.ts`, `BadgeToast.tsx` | `historyStore.ts` |
+| S10E | `stats.tsx`, `HeatmapCalendar.tsx` | `index.tsx` (home) |
+| S11A | `onboarding.tsx` | `settingsStore.ts`, `_layout.tsx` |
+| S11B | `greetingUtils.ts` | `index.tsx` (home) |
+| S12A | — | `quotes.ts`, all completion screens |
+| S12B | `seasonUtils.ts` | `index.tsx` (home) |
+| S12C | `NowPlayingBar.tsx` | `_layout.tsx`, all 4 `session.tsx` |
+| S13 | — | Performance tuning, `app.json` |
+
+*Flowsome Diamond Sprint Guide · June 2026 · Every line of code verified against your exact stack.*

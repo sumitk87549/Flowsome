@@ -1,7 +1,8 @@
-// app/(sessions)/pomodoro/session.tsx
+// Sprint 9 — app/(sessions)/pomodoro/session.tsx
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import * as KeepAwake from 'expo-keep-awake';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withRepeat, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { SafeScreen } from '../../../components/ui/SafeScreen';
@@ -17,7 +18,9 @@ import { useTheme } from '../../../hooks/useTheme';
 import { useSessionStore } from '../../../store/sessionStore';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { HapticUtils } from '../../../utils/hapticUtils';
-import { QUOTES } from '../../../constants/quotes';
+import { QUOTES, getQuoteForSession } from '../../../constants/quotes';
+import { useHistoryStore } from '../../../store/historyStore';
+import { checkAndAwardBadges } from '../../../utils/achievementUtils';
 
 function PomodoroDot({ completed, active, theme }: { completed: boolean; active: boolean; theme: any }) {
   const scale = useSharedValue(1);
@@ -92,7 +95,13 @@ export default function PomodoroSession() {
 
   const totalWorkSeconds = workMin * 60;
   const intention = useSessionStore((s) => s.intention);
-  const { playDing, playSingingBowl } = useSFX();
+  const { playDing, playSingingBowl, playSessionBegin, playSessionEnd } = useSFX();
+
+  const addSession = useHistoryStore((s) => s.addSession);
+  const awardBadge = useHistoryStore((s) => s.awardBadge);
+  const showBadgeToast = useCallback((_badge: any) => {}, []);
+
+  const totalSessionSeconds = workMin * count * 60;
 
   const {
     status,
@@ -117,14 +126,46 @@ export default function PomodoroSession() {
     onAllComplete: () => {
       playSingingBowl();
       HapticUtils.success();
+      playSessionEnd();
     },
   });
 
-  const themeQuotes = QUOTES[activeTheme] || QUOTES['rajasthan'];
-  const activeQuote = themeQuotes[0];
+  const themeQuotes = QUOTES.filter((q) => q.region === activeTheme || q.region === 'all');
+  const activeQuote = themeQuotes.length > 0 ? themeQuotes[0] : QUOTES[0];
+
+  const completionQuote = useMemo(
+    () => getQuoteForSession('focus', activeTheme),
+    [activeTheme],
+  );
 
   useAmbientAudio(activeTheme, true);
-  useBinauralAudio('alpha', status === 'running' && timerPhase === 'work');
+  const binauralPlayer = useBinauralAudio('alpha', status === 'running' && timerPhase === 'work');
+
+  // Mark session as active
+  useEffect(() => {
+    const appState = useAppStore.getState() as any;
+    appState.setSessionActive?.(true);
+    return () => {
+      appState.setSessionActive?.(false);
+    };
+  }, []);
+
+  // Session begin timeout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      playSessionBegin();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [playSessionBegin]);
+
+  // Unmount binaural
+  useEffect(() => {
+    return () => {
+      try {
+        if (typeof binauralPlayer.pause === 'function') binauralPlayer.pause();
+      } catch (_) {}
+    };
+  }, [binauralPlayer]);
 
   useEffect(() => {
     if (keepAwakeEnabled) {
@@ -145,6 +186,18 @@ export default function PomodoroSession() {
 
   useEffect(() => {
     if (status === 'complete') {
+      addSession({
+        type: 'pomodoro',
+        durationMinutes: Math.max(1, Math.floor(totalSessionSeconds / 60)),
+        theme: activeTheme,
+        practiceId: null,
+        intention: intention ?? null,
+        moodBefore: null,
+        moodAfter: null,
+        accomplishmentNote: null,
+      });
+      checkAndAwardBadges(awardBadge, showBadgeToast);
+
       const t = setTimeout(() => {
         router.replace('/' as any);
       }, 4000);
@@ -189,6 +242,12 @@ export default function PomodoroSession() {
 
   return (
     <SafeScreen>
+      <LinearGradient
+        colors={[theme.gradientStart, theme.gradientEnd]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
       <ParticleCanvas />
       
       {showFlowBanner && (
@@ -220,6 +279,22 @@ export default function PomodoroSession() {
             <FlowText size="xs" color={theme.textMuted} style={{ textAlign: 'center', fontStyle: 'italic', marginTop: 4, lineHeight: 18, opacity: 0.85 }}>
               "{language === 'hi-IN' ? activeQuote.textHindi : activeQuote.text}"
             </FlowText>
+          )}
+          {status === 'complete' && completionQuote && (
+            <View style={{ paddingHorizontal: 24, marginTop: 20 }}>
+              <Text style={{
+                color: theme.textMuted,
+                fontSize: 14,
+                fontFamily: 'CormorantGaramond-Italic',
+                textAlign: 'center',
+                lineHeight: 22,
+              }}>
+                "{language === 'hi-IN' && completionQuote.textHindi ? completionQuote.textHindi : completionQuote.text}"
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                — {completionQuote.attribution}
+              </Text>
+            </View>
           )}
           <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 20 }}>
             {Array(count).fill(0).map((_, i) => (
@@ -280,7 +355,11 @@ export default function PomodoroSession() {
                 setShowExitConfirm(true);
               } else {
                 stop();
-                router.back();
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/');
+                }
               }
             }}
             style={{ width: '100%', alignItems: 'center' }}

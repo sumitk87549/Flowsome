@@ -1,7 +1,8 @@
-// app/(sessions)/meditation/session.tsx
+// Sprint 9 — app/(sessions)/meditation/session.tsx
 import { View, Animated, TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as KeepAwake from 'expo-keep-awake';
 import { useSharedValue } from 'react-native-reanimated';
@@ -21,7 +22,9 @@ import { useTheme } from '../../../hooks/useTheme';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { formatTime } from '../../../utils/timeUtils';
 import { HapticUtils } from '../../../utils/hapticUtils';
-import { QUOTES } from '../../../constants/quotes';
+import { QUOTES, getQuoteForSession } from '../../../constants/quotes';
+import { useHistoryStore } from '../../../store/historyStore';
+import { checkAndAwardBadges } from '../../../utils/achievementUtils';
 
 export default function MeditationSession() {
   const router = useRouter();
@@ -35,11 +38,17 @@ export default function MeditationSession() {
   const durationMin = parseInt(params.durationMin ?? '10', 10);
 
   const { speak } = useSpeech();
-  const { playSingingBowl } = useSFX();
+  const { playSingingBowl, playSessionBegin, playSessionEnd } = useSFX();
 
   const [timerVisible, setTimerVisible] = useState(false);
   const [hasDiscoveredToggle, setHasDiscoveredToggle] = useState(false);
   const hintOpacity = useState(() => new Animated.Value(0))[0];
+
+  const addSession = useHistoryStore((s) => s.addSession);
+  const awardBadge = useHistoryStore((s) => s.awardBadge);
+  const showBadgeToast = useCallback((_badge: any) => {}, []);
+
+  const totalSessionSeconds = durationMin * 60;
 
   const { status, secondsLeft, progress, progressShared, start, pause, resume, stop } = useTimer({
     workMinutes: durationMin,
@@ -48,14 +57,46 @@ export default function MeditationSession() {
     onAllComplete: () => {
       playSingingBowl();
       HapticUtils.success();
+      playSessionEnd();
     },
   });
 
-  const themeQuotes = QUOTES[activeTheme] || QUOTES['rajasthan'];
-  const activeQuote = themeQuotes[0];
+  const themeQuotes = QUOTES.filter((q) => q.region === activeTheme || q.region === 'all');
+  const activeQuote = themeQuotes.length > 0 ? themeQuotes[0] : QUOTES[0];
+
+  const completionQuote = useMemo(
+    () => getQuoteForSession('meditation', activeTheme),
+    [activeTheme],
+  );
 
   useAmbientAudio(activeTheme, true);
-  useBinauralAudio(meditationType.binauralMode, status === 'running');
+  const binauralPlayer = useBinauralAudio(meditationType.binauralMode, status === 'running');
+
+  // Mark session as active
+  useEffect(() => {
+    const appState = useAppStore.getState() as any;
+    appState.setSessionActive?.(true);
+    return () => {
+      appState.setSessionActive?.(false);
+    };
+  }, []);
+
+  // Session begin timeout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      playSessionBegin();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [playSessionBegin]);
+
+  // Unmount binaural
+  useEffect(() => {
+    return () => {
+      try {
+        if (typeof binauralPlayer.pause === 'function') binauralPlayer.pause();
+      } catch (_) {}
+    };
+  }, [binauralPlayer]);
 
   useEffect(() => {
     if (keepAwakeEnabled) KeepAwake.activateKeepAwakeAsync();
@@ -73,6 +114,18 @@ export default function MeditationSession() {
 
   useEffect(() => {
     if (status === 'complete') {
+      addSession({
+        type: 'meditation',
+        durationMinutes: Math.max(1, Math.floor(totalSessionSeconds / 60)),
+        theme: activeTheme,
+        practiceId: selectedMeditationId ?? null,
+        intention: null,
+        moodBefore: null,
+        moodAfter: null,
+        accomplishmentNote: null,
+      });
+      checkAndAwardBadges(awardBadge, showBadgeToast);
+
       const t = setTimeout(() => router.replace('/' as any), 4000);
       return () => clearTimeout(t);
     }
@@ -112,6 +165,12 @@ export default function MeditationSession() {
         onPress={toggleTimer}
         activeOpacity={1}
       >
+        <LinearGradient
+          colors={[theme.gradientStart, theme.gradientEnd]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
         <ParticleCanvas />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 60 }}>
           <View style={{ alignItems: 'center', gap: 4, paddingHorizontal: 24 }}>
@@ -125,9 +184,27 @@ export default function MeditationSession() {
               </FlowText>
             )}
             {status === 'complete' && (
-              <FlowText variant="heading" size="xl" color={theme.primary} style={{ marginTop: 8 }}>
-                {language === 'hi-IN' ? '🙏 सत्र पूर्ण' : '🙏 Session Complete'}
-              </FlowText>
+              <>
+                <FlowText variant="heading" size="xl" color={theme.primary} style={{ marginTop: 8 }}>
+                  {language === 'hi-IN' ? '🙏 सत्र पूर्ण' : '🙏 Session Complete'}
+                </FlowText>
+                {completionQuote && (
+                  <View style={{ paddingHorizontal: 24, marginTop: 20 }}>
+                    <Text style={{
+                      color: theme.textMuted,
+                      fontSize: 14,
+                      fontFamily: 'CormorantGaramond-Italic',
+                      textAlign: 'center',
+                      lineHeight: 22,
+                    }}>
+                      "{language === 'hi-IN' && completionQuote.textHindi ? completionQuote.textHindi : completionQuote.text}"
+                    </Text>
+                    <Text style={{ color: theme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                      — {completionQuote.attribution}
+                    </Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
 
@@ -182,7 +259,7 @@ export default function MeditationSession() {
             <FlowButton
               label="End"
               variant="ghost"
-              onPress={() => { stop(); router.back(); }}
+              onPress={() => { stop(); router.canGoBack() ? router.back() : router.replace('/'); }}
               style={{ width: '100%', alignItems: 'center' }}
             />
           </View>
@@ -234,4 +311,3 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans-Regular',
   },
 });
-

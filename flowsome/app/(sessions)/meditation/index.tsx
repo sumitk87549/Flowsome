@@ -1,21 +1,19 @@
-// app/(sessions)/meditation/index.tsx
-import { View, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
+// app/(sessions)/meditation/index.tsx — Premium: Visual overhaul
+import { View, ScrollView, TouchableOpacity, Text } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeScreen } from '../../../components/ui/SafeScreen';
 import { FlowText } from '../../../components/ui/FlowText';
 import { FlowButton } from '../../../components/ui/FlowButton';
 import { MeditationCard } from '../../../components/meditation/MeditationCard';
-import { useTheme, useThemeConfig } from '../../../hooks/useTheme';
+import { useTheme } from '../../../hooks/useTheme';
 import { useSessionStore } from '../../../store/sessionStore';
 import { MEDITATION_TYPES } from '../../../constants/meditation-types';
-import { THEME_IMAGES } from '../../../constants/theme-images';
 import { HapticUtils } from '../../../utils/hapticUtils';
 
 export default function MeditationPicker() {
   const theme = useTheme();
-  const config = useThemeConfig();
   const router = useRouter();
   const { setSelectedMeditation } = useSessionStore();
   const [selectedId, setSelectedId] = useState(MEDITATION_TYPES[0].id);
@@ -35,27 +33,34 @@ export default function MeditationPicker() {
   return (
     <SafeScreen>
       <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <FlowText color={theme.textMuted}>← Back</FlowText>
+        <TouchableOpacity 
+          onPress={() => { HapticUtils.light(); router.back(); }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            marginBottom: 12,
+          }}
+        >
+          <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
+          <Text style={{
+            fontFamily: 'DMSans-Medium',
+            fontSize: 14,
+            color: theme.textMuted,
+          }}>
+            Back
+          </Text>
         </TouchableOpacity>
-        <FlowText variant="heading" size="4xl" color={theme.primary} style={{ marginTop: 16 }}>🧘 Meditate</FlowText>
-        <FlowText variant="body" size="sm" color={theme.textMuted} style={{ marginTop: 4 }}>
+
+        <FlowText variant="heading" size="4xl" color={theme.primary} style={{ marginTop: 4 }}>
+          Meditate
+        </FlowText>
+        <FlowText variant="body" size="sm" color={theme.textMuted} style={{ marginTop: 2 }}>
           Select a practice to cultivate mindfulness
         </FlowText>
-        
-        {/* Landscape banner showcasing the selected region */}
-        <View style={{ borderRadius: 16, overflow: 'hidden', height: 95, marginTop: 16, borderWidth: 1, borderColor: theme.cardBorder }}>
-          <ImageBackground source={THEME_IMAGES[config.id]} style={{ width: '100%', height: '100%', justifyContent: 'flex-end' }}>
-            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={{ padding: 12 }}>
-              <FlowText color="#FFFFFF" variant="headingItalic" size="sm" style={{ letterSpacing: 0.5 }}>
-                Meditating with regional presence in {config.name} {config.icon}
-              </FlowText>
-            </LinearGradient>
-          </ImageBackground>
-        </View>
       </View>
       
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingTop: 16, paddingBottom: 150 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingTop: 20, paddingBottom: 150 }}>
         {MEDITATION_TYPES.map(type => (
           <MeditationCard
             key={type.id}
@@ -99,6 +104,7 @@ export default function MeditationPicker() {
           </View>
         </View>
       </ScrollView>
+
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 40 }}>
         <FlowButton
           label="Begin Meditation"
@@ -110,4 +116,3 @@ export default function MeditationPicker() {
     </SafeScreen>
   );
 }
-

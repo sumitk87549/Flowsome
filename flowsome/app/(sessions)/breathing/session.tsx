@@ -1,7 +1,8 @@
-// app/(sessions)/breathing/session.tsx
+// Sprint 9 — app/(sessions)/breathing/session.tsx
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import * as KeepAwake from 'expo-keep-awake';
 import { useSharedValue, cancelAnimation } from 'react-native-reanimated';
 import { SafeScreen } from '../../../components/ui/SafeScreen';
@@ -14,12 +15,14 @@ import { ParticleCanvas } from '../../../components/particles/ParticleCanvas';
 import { useBreathing } from '../../../hooks/useBreathing';
 import { useSessionStore } from '../../../store/sessionStore';
 import { BREATHING_PATTERNS } from '../../../constants/breathing-patterns';
-import { useAmbientAudio, useSFX } from '../../../hooks/useAudio';
+import { useAmbientAudio, useSFX, useBinauralAudio } from '../../../hooks/useAudio';
 import { useTheme } from '../../../hooks/useTheme';
 import { useAppStore } from '../../../store/appStore';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { HapticUtils } from '../../../utils/hapticUtils';
-import { QUOTES } from '../../../constants/quotes';
+import { QUOTES, getQuoteForSession } from '../../../constants/quotes';
+import { useHistoryStore } from '../../../store/historyStore';
+import { checkAndAwardBadges } from '../../../utils/achievementUtils';
 
 export default function BreathingSession() {
   const router = useRouter();
@@ -27,16 +30,22 @@ export default function BreathingSession() {
   const { activeTheme } = useAppStore();
   const { selectedPatternId } = useSessionStore();
   const { keepAwakeEnabled, language } = useSettingsStore();
-  const { playSingingBowl } = useSFX();
+  const { playSingingBowl, playSessionBegin, playSessionEnd, playPhaseTransition } = useSFX();
 
   const [showCompletion, setShowCompletion] = useState(false);
   const [completionTimer, setCompletionTimer] = useState(5);
   const [moodAfter, setMoodAfter] = useState<number | null>(null);
   const staticZeroShared = useSharedValue(0);
 
+  const addSession = useHistoryStore((s) => s.addSession);
+  const awardBadge = useHistoryStore((s) => s.awardBadge);
+  const showBadgeToast = useCallback((_badge: any) => {}, []);
+
   const pattern =
     BREATHING_PATTERNS.find((p) => p.id === selectedPatternId) ??
     BREATHING_PATTERNS[0];
+
+  const totalSessionSeconds = pattern.cycles * pattern.phases.reduce((sum, p) => sum + p.durationSeconds, 0);
 
   const {
     state,
@@ -49,12 +58,31 @@ export default function BreathingSession() {
     pause,
     resume,
     stop,
-  } = useBreathing(pattern);
+  } = useBreathing(pattern, {
+    onPhaseChange: (phaseName) => {
+      playPhaseTransition();
+    }
+  });
+  
   const totalCycles = pattern.cycles;
 
   // Get active quote for theme
-  const themeQuotes = QUOTES[activeTheme] || QUOTES['rajasthan'];
-  const activeQuote = themeQuotes[0];
+  const themeQuotes = QUOTES.filter((q) => q.region === activeTheme || q.region === 'all');
+  const activeQuote = themeQuotes.length > 0 ? themeQuotes[0] : QUOTES[0];
+
+  const completionQuote = useMemo(
+    () => getQuoteForSession('breathing', activeTheme),
+    [activeTheme],
+  );
+
+  // Mark session as active
+  useEffect(() => {
+    const appState = useAppStore.getState() as any;
+    appState.setSessionActive?.(true);
+    return () => {
+      appState.setSessionActive?.(false);
+    };
+  }, []);
 
   // Keep screen awake during session
   useEffect(() => {
@@ -68,6 +96,14 @@ export default function BreathingSession() {
     };
   }, [keepAwakeEnabled]);
 
+  // Session begin timeout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      playSessionBegin();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [playSessionBegin]);
+
   // Auto-start 800ms after screen mounts
   useEffect(() => {
     const timer = setTimeout(() => start(), 800);
@@ -79,6 +115,20 @@ export default function BreathingSession() {
     if (state === 'complete' && !showCompletion) {
       setShowCompletion(true);
       playSingingBowl();
+      playSessionEnd();
+
+      addSession({
+        type: 'breathing',
+        durationMinutes: Math.max(1, Math.floor(totalSessionSeconds / 60)),
+        theme: activeTheme,
+        practiceId: selectedPatternId ?? null,
+        intention: null,
+        moodBefore: null,
+        moodAfter: moodAfter ?? null,
+        accomplishmentNote: null,
+      });
+      checkAndAwardBadges(awardBadge, showBadgeToast);
+
       const interval = setInterval(() => {
         setCompletionTimer((t) => {
           if (t <= 1) {
@@ -91,18 +141,38 @@ export default function BreathingSession() {
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [state, showCompletion, playSingingBowl, router]);
+  }, [state, showCompletion, playSingingBowl, playSessionEnd, router]);
 
   // Ambient audio (loops, plays for duration of screen)
   useAmbientAudio(activeTheme, true);
+  
+  // Binaural audio
+  const binauralPlayer = useBinauralAudio('alpha', state === 'running');
+  useEffect(() => {
+    return () => {
+      try {
+        if (typeof binauralPlayer.pause === 'function') binauralPlayer.pause();
+      } catch (_) {}
+    };
+  }, [binauralPlayer]);
 
   const handleStop = () => {
     stop();
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
   };
 
   return (
     <SafeScreen>
+      <LinearGradient
+        colors={[theme.gradientStart, theme.gradientEnd]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
       <ParticleCanvas breathPhase={currentPhase.name as any} opacity={0.45} />
       <View
         style={{
@@ -193,6 +263,23 @@ export default function BreathingSession() {
             {totalCycles} cycles · {(selectedPatternId ?? '').replace(/-/g, ' ')}
           </Text>
 
+          {completionQuote && (
+            <View style={{ paddingHorizontal: 24, marginTop: 20 }}>
+              <Text style={{
+                color: theme.textMuted,
+                fontSize: 14,
+                fontFamily: 'CormorantGaramond-Italic',
+                textAlign: 'center',
+                lineHeight: 22,
+              }}>
+                "{language === 'hi-IN' && completionQuote.textHindi ? completionQuote.textHindi : completionQuote.text}"
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 8 }}>
+                — {completionQuote.attribution}
+              </Text>
+            </View>
+          )}
+
           {/* Mood selector — 5 dots */}
           <View style={styles.moodRow}>
             {[1, 2, 3, 4, 5].map((n) => (
@@ -249,4 +336,3 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
 });
-

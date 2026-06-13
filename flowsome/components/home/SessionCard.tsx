@@ -1,8 +1,9 @@
-// components/home/SessionCard.tsx
-import { TouchableOpacity, View } from 'react-native';
+// components/home/SessionCard.tsx — Premium: Ionicons, no emojis
+import { useRef, useEffect } from 'react';
+import { TouchableOpacity, View, Animated as RNAnimated, Text } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { FlowText } from '../ui/FlowText';
 import { FlowCard } from '../ui/FlowCard';
 import { useTheme } from '../../hooks/useTheme';
 import { HapticUtils } from '../../utils/hapticUtils';
@@ -12,17 +13,16 @@ export interface SessionCardData {
   title: string;
   titleHindi: string;
   subtitle: string;
-  tagline: string;
-  icon: string;
+  icon: string;          // Ionicons name
   route: string;
   accent: 'blue' | 'orange' | 'purple' | 'green';
 }
 
 const ACCENT_COLORS = {
-  blue: ['rgba(59, 130, 246, 0.15)', 'rgba(29, 78, 216, 0.02)'],
-  orange: ['rgba(245, 158, 11, 0.15)', 'rgba(180, 83, 9, 0.02)'],
-  purple: ['rgba(139, 92, 246, 0.15)', 'rgba(109, 40, 217, 0.02)'],
-  green: ['rgba(16, 185, 129, 0.15)', 'rgba(4, 120, 87, 0.02)'],
+  blue:   { bg: ['rgba(112,184,248,0.12)', 'rgba(64,128,208,0.04)'], icon: '#70B8F8' },
+  orange: { bg: ['rgba(240,160,48,0.12)', 'rgba(180,83,9,0.04)'],   icon: '#F0A030' },
+  purple: { bg: ['rgba(160,140,220,0.12)', 'rgba(100,60,180,0.04)'], icon: '#A08CDC' },
+  green:  { bg: ['rgba(64,200,120,0.12)', 'rgba(40,140,80,0.04)'],   icon: '#40C878' },
 } as const;
 
 export const SESSION_CARDS: SessionCardData[] = [
@@ -31,8 +31,7 @@ export const SESSION_CARDS: SessionCardData[] = [
     title: 'Breathe',
     titleHindi: 'श्वास',
     subtitle: 'Box · 4-7-8 · Nadi Shodhana',
-    tagline: 'Calm the mind',
-    icon: '🌬️',
+    icon: 'leaf-outline',
     route: '/(sessions)/breathing/',
     accent: 'blue',
   },
@@ -41,8 +40,7 @@ export const SESSION_CARDS: SessionCardData[] = [
     title: 'Focus',
     titleHindi: 'फोकस',
     subtitle: 'Pomodoro · Deep Work',
-    tagline: 'Train concentration',
-    icon: '⏱️',
+    icon: 'time-outline',
     route: '/(sessions)/pomodoro/',
     accent: 'orange',
   },
@@ -51,8 +49,7 @@ export const SESSION_CARDS: SessionCardData[] = [
     title: 'Meditate',
     titleHindi: 'ध्यान',
     subtitle: 'Mindfulness · Yoga Nidra',
-    tagline: 'Deep presence',
-    icon: '🧘',
+    icon: 'flower-outline',
     route: '/(sessions)/meditation/',
     accent: 'purple',
   },
@@ -61,8 +58,7 @@ export const SESSION_CARDS: SessionCardData[] = [
     title: 'Flow',
     titleHindi: 'प्रवाह',
     subtitle: 'Deep Work · Creative',
-    tagline: 'Enter the zone',
-    icon: '✨',
+    icon: 'sparkles-outline',
     route: '/(sessions)/focus/',
     accent: 'green',
   },
@@ -70,54 +66,112 @@ export const SESSION_CARDS: SessionCardData[] = [
 
 interface SessionCardProps {
   data: SessionCardData;
+  delay?: number;
 }
 
-export function SessionCard({ data }: SessionCardProps) {
+export function SessionCard({ data, delay = 0 }: SessionCardProps) {
   const theme = useTheme();
   const router = useRouter();
+  const pressScale = useRef(new RNAnimated.Value(1)).current;
+  const entranceOpacity = useRef(new RNAnimated.Value(0)).current;
+  const entranceTranslate = useRef(new RNAnimated.Value(16)).current;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      RNAnimated.parallel([
+        RNAnimated.timing(entranceOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        RNAnimated.timing(entranceTranslate, { toValue: 0, duration: 500, useNativeDriver: true }),
+      ]).start();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  const handlePressIn = () => {
+    RNAnimated.spring(pressScale, { toValue: 0.96, useNativeDriver: true, damping: 15, stiffness: 200 }).start();
+  };
+  const handlePressOut = () => {
+    RNAnimated.spring(pressScale, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 180 }).start();
+  };
 
   const handlePress = () => {
     HapticUtils.medium();
     router.push(data.route as any);
   };
 
-  const gradients = ACCENT_COLORS[data.accent];
+  const accentConfig = ACCENT_COLORS[data.accent];
 
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      activeOpacity={0.85}
-      style={{ flex: 1, minWidth: '45%', maxWidth: '48%' }}
-    >
-      <FlowCard style={{ padding: 0, minHeight: 155, overflow: 'hidden' }}>
-        <LinearGradient
-          colors={gradients}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ padding: 18, flex: 1, justifyContent: 'space-between' }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <FlowText size="3xl">{data.icon}</FlowText>
-            <FlowText size="xs" color={theme.textMuted} style={{ opacity: 0.6 }}>→</FlowText>
-          </View>
-          
-          <View style={{ marginTop: 8 }}>
-            <FlowText variant="heading" size="xl" color={theme.primary}>
-              {data.title}
-            </FlowText>
-            <FlowText variant="headingLight" size="sm" color={theme.textSecondary} style={{ opacity: 0.8 }}>
-              {data.titleHindi}
-            </FlowText>
-          </View>
+    <RNAnimated.View style={{
+      flex: 1,
+      minWidth: '45%',
+      maxWidth: '48%',
+      opacity: entranceOpacity,
+      transform: [{ translateY: entranceTranslate }, { scale: pressScale }],
+    }}>
+      <TouchableOpacity
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        <FlowCard style={{ padding: 0, minHeight: 170, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={accentConfig.bg}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ padding: 20, flex: 1, justifyContent: 'space-between' }}
+          >
+            {/* Icon row */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Ionicons name={data.icon as any} size={22} color={accentConfig.icon} />
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.textMuted} style={{ opacity: 0.4 }} />
+            </View>
 
-          <View style={{ marginTop: 4 }}>
-            <FlowText variant="body" size="xs" color={theme.textMuted} style={{ fontSize: 10 }}>
+            {/* Title block */}
+            <View style={{ marginTop: 16 }}>
+              <Text style={{
+                fontFamily: 'CormorantGaramond-SemiBold',
+                fontSize: 24,
+                color: theme.text,
+                textShadowColor: 'rgba(0,0,0,0.4)',
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 3,
+              }}>
+                {data.title}
+              </Text>
+              <Text style={{
+                fontFamily: 'DMSans-Regular',
+                fontSize: 13,
+                color: theme.textMuted,
+                marginTop: 2,
+              }}>
+                {data.titleHindi}
+              </Text>
+            </View>
+
+            {/* Subtitle */}
+            <Text style={{
+              fontFamily: 'DMSans-Regular',
+              fontSize: 10,
+              color: theme.textMuted,
+              opacity: 0.7,
+              letterSpacing: 0.5,
+              marginTop: 8,
+            }}>
               {data.subtitle}
-            </FlowText>
-          </View>
-        </LinearGradient>
-      </FlowCard>
-    </TouchableOpacity>
+            </Text>
+          </LinearGradient>
+        </FlowCard>
+      </TouchableOpacity>
+    </RNAnimated.View>
   );
 }
-

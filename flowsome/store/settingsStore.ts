@@ -18,6 +18,8 @@ interface SettingsState {
   setSfxVolume: (v: number) => void;
   setHapticsEnabled: (v: boolean) => void;
   setKeepAwakeEnabled: (v: boolean) => void;
+  hasCompletedOnboarding: boolean;
+  setOnboardingComplete: () => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -35,6 +37,8 @@ export const useSettingsStore = create<SettingsState>()(
       setSfxVolume: (sfxVolume) => set({ sfxVolume }),
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setKeepAwakeEnabled: (keepAwakeEnabled) => set({ keepAwakeEnabled }),
+      hasCompletedOnboarding: false,
+      setOnboardingComplete: () => set({ hasCompletedOnboarding: true }),
     }),
     {
       name: 'flowsome-settings',

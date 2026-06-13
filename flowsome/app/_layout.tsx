@@ -1,6 +1,6 @@
 // app/_layout.tsx — Root Layout (Sprint 4 version)
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -13,12 +13,14 @@ import { FONTS } from '../constants/typography';
 import { useAppStore } from '../store/appStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { THEMES } from '../constants/themes';
+import NowPlayingBar from '../components/session/NowPlayingBar';
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const { activeTheme, dayNight } = useAppStore();
+  const hasCompletedOnboarding = useSettingsStore((s) => s.hasCompletedOnboarding);
   const theme =
     dayNight === 'day'
       ? THEMES[activeTheme].dayColors
@@ -39,7 +41,13 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // ── Effect 1: Sync Android window root background color ────────
+  useEffect(() => {
+    if (fontsLoaded && !hasCompletedOnboarding) {
+      router.replace('/onboarding' as any);
+    }
+  }, [fontsLoaded, hasCompletedOnboarding]);
+
+  // ── Effect 1: Sync Android window background to theme ────────
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(theme.background);
   }, [theme.background]);
@@ -64,14 +72,18 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <StatusBar style={dayNight === 'day' ? 'dark' : 'light'} />
-        <NavigationBar style={dayNight === 'day' ? 'dark' : 'light'} />
+        <StatusBar style="light" />
+        <NavigationBar style="light" />
         <Stack
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: theme.background },
           }}
-        />
+        >
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="(screens)" options={{ headerShown: false }} />
+        </Stack>
+        <NowPlayingBar />
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

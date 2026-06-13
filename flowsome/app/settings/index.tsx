@@ -1,6 +1,8 @@
-// app/settings/index.tsx
-import { View, Switch, TouchableOpacity, ScrollView, Image } from 'react-native';
+// app/settings/index.tsx — Sprint 13: Refined premium settings
+import { View, Switch, TouchableOpacity, ScrollView, Image, Text } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeScreen } from '../../components/ui/SafeScreen';
 import { FlowText } from '../../components/ui/FlowText';
@@ -52,6 +54,23 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
+function SectionLabel({ children }: { children: string }) {
+  const theme = useTheme();
+  return (
+    <Text style={{
+      fontFamily: 'DMSans-Medium',
+      fontSize: 11,
+      color: theme.textMuted,
+      letterSpacing: 2.5,
+      textTransform: 'uppercase',
+      marginTop: 28,
+      marginBottom: 10,
+    }}>
+      {children}
+    </Text>
+  );
+}
+
 export default function Settings() {
   const theme = useTheme();
   const config = useThemeConfig();
@@ -68,31 +87,58 @@ export default function Settings() {
   return (
     <SafeScreen>
       <Animated.View entering={FadeIn.duration(350)} style={{ flex: 1 }}>
-        <View style={{
-          paddingHorizontal: 24,
-          paddingTop: 16,
-          paddingBottom: 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 16,
-        }}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <FlowText color={theme.textMuted}>← Back</FlowText>
-          </TouchableOpacity>
-          <FlowText variant="heading" size="3xl" color={theme.primary}>Settings</FlowText>
+        {/* Header with gradient backdrop */}
+        <View style={{ position: 'relative' }}>
+          <LinearGradient
+            colors={[theme.gradientStart, theme.background]}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0,
+              height: 120,
+              opacity: 0.15,
+            }}
+          />
+          <View style={{
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+            <TouchableOpacity 
+              onPress={() => { HapticUtils.light(); router.back(); }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
+              <Text style={{
+                fontFamily: 'DMSans-Medium',
+                fontSize: 14,
+                color: theme.textMuted,
+              }}>
+                Back
+              </Text>
+            </TouchableOpacity>
+            <Text style={{
+              fontFamily: 'CormorantGaramond-SemiBold',
+              fontSize: 30,
+              color: theme.primary,
+              letterSpacing: 1,
+              marginLeft: 12,
+            }}>
+              Settings
+            </Text>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60 }}>
 
           {/* Language */}
-          <FlowText
-            variant="label"
-            size="xs"
-            color={theme.textMuted}
-            style={{ marginTop: 24, marginBottom: 8, letterSpacing: 2, textTransform: 'uppercase' }}
-          >
-            Language
-          </FlowText>
+          <SectionLabel>Language</SectionLabel>
           <FlowCard style={{ padding: 16 }}>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               {(['en-IN', 'hi-IN'] as Language[]).map((lang) => (
@@ -101,7 +147,7 @@ export default function Settings() {
                   onPress={() => { HapticUtils.medium(); setLanguage(lang); }}
                   style={{
                     flex: 1,
-                    paddingVertical: 12,
+                    paddingVertical: 14,
                     borderRadius: 12,
                     alignItems: 'center',
                     backgroundColor: language === lang ? theme.primary : theme.card,
@@ -109,42 +155,29 @@ export default function Settings() {
                     borderColor: language === lang ? theme.primary : theme.cardBorder,
                   }}
                 >
-                  <FlowText
-                    variant="bodyMedium"
-                    size="sm"
-                    color={language === lang ? theme.background : theme.text}
-                  >
-                    {lang === 'en-IN' ? '🇬🇧 English' : '🇮🇳 हिन्दी'}
-                  </FlowText>
+                  <Text style={{
+                    fontFamily: 'DMSans-Medium',
+                    fontSize: 14,
+                    color: language === lang ? theme.background : theme.text,
+                    letterSpacing: 0.5,
+                  }}>
+                    {lang === 'en-IN' ? 'EN · English' : 'हिं · हिन्दी'}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
           </FlowCard>
 
           {/* Audio */}
-          <FlowText
-            variant="label"
-            size="xs"
-            color={theme.textMuted}
-            style={{ marginTop: 24, marginBottom: 8, letterSpacing: 2, textTransform: 'uppercase' }}
-          >
-            Audio
-          </FlowText>
+          <SectionLabel>Audio</SectionLabel>
           <FlowCard style={{ padding: 16, gap: 16 }}>
-            <VolumeSlider label="🌿 Ambient" value={ambientVolume} onChange={setAmbientVolume} />
-            <VolumeSlider label="🎵 Binaural" value={binauralVolume} onChange={setBinauralVolume} />
-            <VolumeSlider label="🔔 SFX" value={sfxVolume} onChange={setSfxVolume} />
+            <VolumeSlider label="Ambient" value={ambientVolume} onChange={setAmbientVolume} />
+            <VolumeSlider label="Binaural Beats" value={binauralVolume} onChange={setBinauralVolume} />
+            <VolumeSlider label="Sound Effects" value={sfxVolume} onChange={setSfxVolume} />
           </FlowCard>
 
           {/* Device */}
-          <FlowText
-            variant="label"
-            size="xs"
-            color={theme.textMuted}
-            style={{ marginTop: 24, marginBottom: 8, letterSpacing: 2, textTransform: 'uppercase' }}
-          >
-            Device
-          </FlowText>
+          <SectionLabel>Device</SectionLabel>
           <FlowCard style={{ padding: 16 }}>
             <SettingRow label="Haptic Feedback">
               <Switch
@@ -165,22 +198,33 @@ export default function Settings() {
           </FlowCard>
 
           {/* About */}
-          <FlowText
-            variant="label"
-            size="xs"
-            color={theme.textMuted}
-            style={{ marginTop: 24, marginBottom: 8, letterSpacing: 2, textTransform: 'uppercase' }}
-          >
-            About
-          </FlowText>
+          <SectionLabel>About</SectionLabel>
           <FlowCard style={{ padding: 0, overflow: 'hidden', borderWidth: 1, borderColor: theme.cardBorder }}>
             <Image source={THEME_IMAGES[config.id]} style={{ width: '100%', height: 110 }} resizeMode="cover" />
             <View style={{ padding: 16, gap: 4 }}>
-              <FlowText variant="heading" size="xl" color={theme.primary}>Flowsome</FlowText>
-              <FlowText size="sm" color={theme.textMuted}>Version 1.0.0 · Expo SDK 56</FlowText>
-              <FlowText size="xs" color={theme.textMuted} style={{ marginTop: 8, lineHeight: 16 }}>
+              <Text style={{
+                fontFamily: 'CormorantGaramond-SemiBold',
+                fontSize: 22,
+                color: theme.primary,
+              }}>
+                Flowsome
+              </Text>
+              <Text style={{
+                fontFamily: 'DMSans-Regular',
+                fontSize: 13,
+                color: theme.textMuted,
+              }}>
+                Version 1.0.0 · Expo SDK 56
+              </Text>
+              <Text style={{
+                fontFamily: 'DMSans-Regular',
+                fontSize: 11,
+                color: theme.textMuted,
+                marginTop: 8,
+                lineHeight: 16,
+              }}>
                 Wellness & productivity with Indian identity. Five regions. Four sessions. One practice.
-              </FlowText>
+              </Text>
             </View>
           </FlowCard>
 
@@ -189,4 +233,3 @@ export default function Settings() {
     </SafeScreen>
   );
 }
-

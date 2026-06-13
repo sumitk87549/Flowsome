@@ -1,4 +1,4 @@
-// hooks/useAudio.ts
+// Sprint 9 — hooks/useAudio.ts
 import { useAudioPlayer, AudioSource } from 'expo-audio';
 import { useEffect } from 'react';
 import { useSettingsStore } from '../store/settingsStore';
@@ -20,9 +20,15 @@ const BINAURAL_TRACKS: Record<string, AudioSource> = {
 };
 
 export const SFX_TRACKS: Record<string, AudioSource> = {
-  ding:        require('../assets/audio/sfx/ding-soft.mp3'),
-  singingBowl: require('../assets/audio/sfx/singing-bowl.mp3'),
-  breathDone:  require('../assets/audio/sfx/breath-complete.mp3'),
+  ding:               require('../assets/audio/sfx/ding-soft.mp3'),
+  singingBowl:        require('../assets/audio/sfx/singing-bowl.mp3'),
+  breathDone:         require('../assets/audio/sfx/breath-complete.mp3'),
+  'region-select':    require('../assets/audio/sfx/sfx-region-select.mp3'),
+  'session-begin':    require('../assets/audio/sfx/sfx-session-begin.mp3'),
+  'phase-transition': require('../assets/audio/sfx/sfx-phase-transition.mp3'),
+  'session-end':      require('../assets/audio/sfx/sfx-session-end.mp3'),
+  'streak-milestone': require('../assets/audio/sfx/sfx-streak-milestone.mp3'),
+  'badge-earned':     require('../assets/audio/sfx/sfx-badge-earned.mp3'),
 };
 
 // ─── Ambient Audio ────────────────────────────────────────────────────────────
@@ -39,7 +45,7 @@ export function useAmbientAudio(theme: string, autoPlay: boolean = true) {
       player.play();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme, autoPlay]);
+  }, [theme, autoPlay, player]);
 
   // Respond to volume changes without restarting playback
   useEffect(() => {
@@ -63,7 +69,7 @@ export function useBinauralAudio(mode: 'alpha' | 'theta' | 'delta', autoPlay: bo
       player.play();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, autoPlay]);
+  }, [mode, autoPlay, player]);
 
   useEffect(() => {
     player.volume = binauralVolume;
@@ -75,28 +81,46 @@ export function useBinauralAudio(mode: 'alpha' | 'theta' | 'delta', autoPlay: bo
 // ─── SFX (one-shot sounds) ────────────────────────────────────────────────────
 // Each sound is a separate player. Seeking to 0 before play allows replay.
 export function useSFX() {
-  const dingPlayer   = useAudioPlayer(SFX_TRACKS['ding']);
-  const bowlPlayer   = useAudioPlayer(SFX_TRACKS['singingBowl']);
-  const breathPlayer = useAudioPlayer(SFX_TRACKS['breathDone']);
-  const sfxVolume    = useSettingsStore((s) => s.sfxVolume);
+  const dingPlayer         = useAudioPlayer(SFX_TRACKS['ding']);
+  const bowlPlayer         = useAudioPlayer(SFX_TRACKS['singingBowl']);
+  const breathPlayer       = useAudioPlayer(SFX_TRACKS['breathDone']);
+  const regionPlayer       = useAudioPlayer(SFX_TRACKS['region-select']);
+  const beginPlayer        = useAudioPlayer(SFX_TRACKS['session-begin']);
+  const transitionPlayer   = useAudioPlayer(SFX_TRACKS['phase-transition']);
+  const endPlayer          = useAudioPlayer(SFX_TRACKS['session-end']);
+  const streakPlayer       = useAudioPlayer(SFX_TRACKS['streak-milestone']);
+  const badgePlayer        = useAudioPlayer(SFX_TRACKS['badge-earned']);
 
-  const playDing = (): void => {
-    dingPlayer.volume = sfxVolume;
-    dingPlayer.seekTo(0);
-    dingPlayer.play();
+  const sfxVolume          = useSettingsStore((s) => s.sfxVolume);
+
+  const play = (player: any, volumeMultiplier: number = 1.0) => {
+    if (sfxVolume === 0) return;
+    try {
+      player.volume = sfxVolume * volumeMultiplier;
+      player.seekTo(0);
+      player.play();
+    } catch (_) {}
   };
 
-  const playSingingBowl = (): void => {
-    bowlPlayer.volume = sfxVolume;
-    bowlPlayer.seekTo(0);
-    bowlPlayer.play();
-  };
+  const playDing            = (): void => play(dingPlayer);
+  const playSingingBowl     = (): void => play(bowlPlayer);
+  const playBreathDone      = (): void => play(breathPlayer);
+  const playRegionSelect    = (): void => play(regionPlayer);
+  const playSessionBegin    = (): void => play(beginPlayer);
+  const playPhaseTransition = (): void => play(transitionPlayer, 0.4);
+  const playSessionEnd      = (): void => play(endPlayer);
+  const playStreakMilestone = (): void => play(streakPlayer);
+  const playBadgeEarned     = (): void => play(badgePlayer);
 
-  const playBreathDone = (): void => {
-    breathPlayer.volume = sfxVolume;
-    breathPlayer.seekTo(0);
-    breathPlayer.play();
+  return {
+    playDing,
+    playSingingBowl,
+    playBreathDone,
+    playRegionSelect,
+    playSessionBegin,
+    playPhaseTransition,
+    playSessionEnd,
+    playStreakMilestone,
+    playBadgeEarned,
   };
-
-  return { playDing, playSingingBowl, playBreathDone };
 }

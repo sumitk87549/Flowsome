@@ -1,10 +1,10 @@
-// hooks/useBreathing.ts
+// Sprint 9 — hooks/useBreathing.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSharedValue, cancelAnimation } from 'react-native-reanimated';
 import { BreathingPattern, BreathingPhase as BreathingPhaseObject } from '../constants/breathing-patterns';
 import { useSessionStore } from '../store/sessionStore';
 import { useSpeech } from './useSpeech';
-import { HapticUtils } from '../utils/hapticUtils';
+import { HapticUtils, hapticForBreathingPhase } from '../utils/hapticUtils';
 
 // NOTE: 'BreathingPhaseString' is the store's string-union type for setBreathingPhase
 type BreathingPhaseString = 'inhale' | 'holdIn' | 'exhale' | 'holdOut' | 'idle';
@@ -24,7 +24,11 @@ export interface UseBreathingReturn {
   stop: () => void;
 }
 
-export function useBreathing(pattern: BreathingPattern): UseBreathingReturn {
+export interface UseBreathingOptions {
+  onPhaseChange?: (newPhaseName: string) => void;
+}
+
+export function useBreathing(pattern: BreathingPattern, options?: UseBreathingOptions): UseBreathingReturn {
   const [state, setState] = useState<BreathingState>('idle');
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [cycle, setCycle] = useState(0);
@@ -85,7 +89,10 @@ export function useBreathing(pattern: BreathingPattern): UseBreathingReturn {
           if (nextPhase) {
             setBreathingPhase(nextPhase.name as BreathingPhaseString);
             speakPhase(nextPhase.name);
-            HapticUtils.light();
+            hapticForBreathingPhase(nextPhase.name);
+            if (options?.onPhaseChange) {
+              options.onPhaseChange(nextPhase.name);
+            }
           }
         }, 0);
 
@@ -96,7 +103,7 @@ export function useBreathing(pattern: BreathingPattern): UseBreathingReturn {
       phaseProgressShared.value = Math.min(next / phaseDuration, 1);
       return next;
     });
-  }, [phaseIndex, cycle, activePhaseDefs, pattern.cycles, storeSetCycle, speakCue, speakPhase, setBreathingPhase]);
+  }, [phaseIndex, cycle, activePhaseDefs, pattern.cycles, storeSetCycle, speakCue, speakPhase, setBreathingPhase, options]);
 
   useEffect(() => {
     if (state === 'running') {
