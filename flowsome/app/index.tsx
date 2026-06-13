@@ -1,5 +1,5 @@
 // app/index.tsx — Sprint 13: Premium home screen with visual overhaul
-import { View, TouchableOpacity, ScrollView, useWindowDimensions, Text, StyleSheet, Animated as RNAnimated } from 'react-native';
+import { View, TouchableOpacity, ScrollView, useWindowDimensions, Text, StyleSheet, Image, Animated as RNAnimated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
@@ -22,12 +22,14 @@ import { useSettings } from '../hooks/useSettings';
 import { AudioManager } from '../components/audio/AudioManager';
 import { ParticleCanvas } from '../components/particles/ParticleCanvas';
 import { QUOTES } from '../constants/quotes';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const config = useThemeConfig();
   const { language } = useSettings();
+  const insets = useSafeAreaInsets();
 
   const { width } = useWindowDimensions();
   const [pendingBadge, setPendingBadge] = useState<Achievement | null>(null);
@@ -58,10 +60,10 @@ export default function HomeScreen() {
         RNAnimated.timing(headerOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
         RNAnimated.timing(headerTranslate, { toValue: 0, duration: 500, useNativeDriver: true }),
       ]),
-      // Theme selector follows
-      RNAnimated.timing(selectorOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       // Sessions follow
       RNAnimated.timing(sessionsOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      // Theme selector follows
+      RNAnimated.timing(selectorOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       // Quote footer last
       RNAnimated.timing(quoteOpacity, { toValue: 1, duration: 500, useNativeDriver: true, delay: 100 }),
     ]).start();
@@ -83,156 +85,213 @@ export default function HomeScreen() {
   const activeQuote = themeQuotes.length > 0 ? themeQuotes[0] : QUOTES[0];
 
   const headerShadow = {
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    textShadowRadius: 8,
+  };
+
+  const iconShadowStyle = {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 3,
   };
 
   return (
-    <SafeScreen>
-      {/* Particle background */}
-      <ParticleCanvas />
-      {/* Background Audio */}
-      <AudioManager />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <SafeScreen edges={['left', 'right', 'bottom']}>
+        {/* Particle background */}
+        <ParticleCanvas />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.35)', 'transparent']}
+          style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0,
+            height: 160,
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
 
-      {/* Header gradient overlay for text readability */}
-      <LinearGradient
-        colors={[theme.background, 'transparent']}
-        locations={[0, 1]}
-        style={styles.headerGradient}
-        pointerEvents="none"
-      />
+        {/* Background Audio */}
+        <AudioManager />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 64 }}>
-        {/* ── Header Row ──────────────────────────────────────────── */}
-        <RNAnimated.View style={{
-          opacity: headerOpacity,
-          transform: [{ translateY: headerTranslate }],
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 20,
-          paddingTop: 12,
-          paddingBottom: 8,
+        {/* Floating Day/Night Toggle */}
+        <View style={{
+          position: 'absolute',
+          bottom: insets.bottom + 60,
+          left: 16,
+          zIndex: 10,
         }}>
-          {/* Left: Streak Indicator */}
-          <StreakIndicator theme={theme} />
+          <DayNightToggle />
+        </View>
 
-          {/* Center: Brand Title + Season */}
-          <View style={{ alignItems: 'center' }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 64 }}>
+          {/* ── Header Row ──────────────────────────────────────────── */}
+          <RNAnimated.View style={{
+            opacity: headerOpacity,
+            transform: [{ translateY: headerTranslate }],
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingTop: insets.top + 16,
+            paddingBottom: 12,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+            zIndex: 2,
+          }}>
+            {/* Left Side: App Logo & Heading */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 38, height: 38, borderRadius: 19, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                <Image source={require('../assets/icon.png')} style={{ width: 38, height: 38, transform: [{ scale: 1.35 }] }} />
+              </View>
+              <View style={{ alignItems: 'flex-start' }}>
+                <Text style={{
+                  fontFamily: 'CormorantGaramond-Medium',
+                  fontSize: 24,
+                  color: '#FFFFFF',
+                  letterSpacing: 1,
+                  textShadowColor: '#FFFFFF',
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 14,
+                }}>
+                  Flowsome
+                </Text>
+                <Text style={{
+                  fontFamily: 'DMSans-Regular',
+                  fontSize: 9,
+                  color: '#FFFFFF',
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  textShadowColor: 'rgba(255,255,255,0.8)',
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 10,
+                  marginTop: 1,
+                }}>
+                  {seasonInfo.line.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+
+            {/* Right Side: Utilities (Stats & Settings) */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity 
+                onPress={() => { HapticUtils.light(); router.push('/(screens)/stats' as any); }}
+                style={[
+                  styles.headerIconButton,
+                  iconShadowStyle,
+                  {
+                    width: 36,
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }
+                ]}
+              >
+                <Ionicons name="stats-chart" size={18} color="#FFFFFF" style={{ textShadowColor: '#FFFFFF', textShadowRadius: 8 }} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { HapticUtils.light(); router.push('/settings/' as any); }}
+                style={[
+                  styles.headerIconButton,
+                  iconShadowStyle,
+                  {
+                    width: 36,
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }
+                ]}
+              >
+                <Ionicons name="settings-outline" size={20} color="#FFFFFF" style={{ textShadowColor: '#FFFFFF', textShadowRadius: 8 }} />
+              </TouchableOpacity>
+            </View>
+          </RNAnimated.View>
+
+          {/* ── Dynamic Greeting Watermark ────────────────────────── */}
+          <Animated.View style={[styles.greetingContainer, greetingStyle]} pointerEvents="none">
+            <Text style={[styles.greetingText, { color: theme.textSecondary, fontFamily: 'CormorantGaramond-Italic', ...headerShadow }]}>
+              {greeting.line}
+            </Text>
+          </Animated.View>
+
+          {/* ── Session Cards (Prioritized) ─────────────────────────── */}
+          <RNAnimated.View style={{ opacity: sessionsOpacity, paddingHorizontal: 20, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {SESSION_CARDS.map((card, i) => (
+                <SessionCard key={card.id} data={card} delay={100 + i * 80} />
+              ))}
+            </View>
+          </RNAnimated.View>
+
+          {/* ── Theme Selector strip ───────────────────────────────── */}
+          <RNAnimated.View style={{ opacity: selectorOpacity, marginBottom: 16 }}>
             <Text style={{
-              fontFamily: 'CormorantGaramond-SemiBold',
-              fontSize: 28,
-              color: theme.primary,
+              color: 'rgba(255,255,255,0.5)',
+              fontSize: 10,
               letterSpacing: 2,
+              fontFamily: 'DMSans-Regular',
+              textTransform: 'uppercase',
+              marginTop: 20,
+              marginBottom: 10,
+              marginLeft: 20,
+              textShadowColor: 'rgba(0,0,0,0.5)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 4,
+            }}>
+              Choose Your Landscape
+            </Text>
+            <ThemeSelector />
+          </RNAnimated.View>
+
+          {/* ── Daily Quote (As peaceful footer) ────────────────────── */}
+          <RNAnimated.View style={{ opacity: quoteOpacity, paddingHorizontal: 32, paddingVertical: 24, alignItems: 'center' }}>
+            <View style={[styles.quoteSeparator, { backgroundColor: theme.cardBorder }]} />
+            
+            <Text style={{
+              fontFamily: 'CormorantGaramond-Italic',
+              fontSize: 16,
+              color: theme.textSecondary,
+              textAlign: 'center',
+              lineHeight: 24,
+              marginTop: 14,
+              opacity: 0.9,
               ...headerShadow,
             }}>
-              Flowsome
+              "{language === 'hi-IN' && activeQuote.textHindi ? activeQuote.textHindi : activeQuote.text}"
             </Text>
             <Text style={{
+              fontFamily: 'DMSans-Regular',
+              fontSize: 9,
               color: theme.textMuted,
-              fontSize: 8,
+              textAlign: 'center',
               letterSpacing: 2,
-              fontFamily: 'DMSans-Medium',
-              marginTop: 2,
-              opacity: 0.8,
-              ...headerShadow,
+              marginTop: 8,
+              textTransform: 'uppercase',
+              opacity: 0.7,
             }}>
-              {seasonInfo.line.toUpperCase()}
+              — {activeQuote.attribution}
             </Text>
-          </View>
 
-          {/* Right: Stats, Settings, Day/Night */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <TouchableOpacity 
-              onPress={() => { HapticUtils.light(); router.push('/(screens)/stats' as any); }}
-              style={styles.headerIconButton}
-            >
-              <Ionicons name="bar-chart-outline" size={20} color={theme.textMuted} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => { HapticUtils.light(); router.push('/settings/' as any); }}
-              style={styles.headerIconButton}
-            >
-              <Ionicons name="settings-outline" size={20} color={theme.textMuted} />
-            </TouchableOpacity>
-            <DayNightToggle />
-          </View>
-        </RNAnimated.View>
+            <View style={[styles.quoteSeparator, { backgroundColor: theme.cardBorder, marginTop: 14 }]} />
+          </RNAnimated.View>
+        </ScrollView>
 
-        {/* ── Dynamic Greeting Watermark ────────────────────────── */}
-        <Animated.View style={[styles.greetingContainer, greetingStyle]} pointerEvents="none">
-          <Text style={[styles.greetingText, { color: theme.textSecondary, fontFamily: 'CormorantGaramond-Italic', ...headerShadow }]}>
-            {greeting.line}
-          </Text>
-        </Animated.View>
+        {/* 108 Mala beads */}
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+          <MalaIndicator width={width} theme={theme} />
+        </View>
 
-        {/* ── Theme Selector strip ───────────────────────────────── */}
-        <RNAnimated.View style={{ opacity: selectorOpacity, marginBottom: 16 }}>
-          <ThemeSelector />
-        </RNAnimated.View>
-
-        {/* ── Session Cards (Prioritized) ─────────────────────────── */}
-        <RNAnimated.View style={{ opacity: sessionsOpacity, paddingHorizontal: 20, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-            {SESSION_CARDS.map((card, i) => (
-              <SessionCard key={card.id} data={card} delay={100 + i * 80} />
-            ))}
-          </View>
-        </RNAnimated.View>
-
-        {/* ── Daily Quote (As peaceful footer) ────────────────────── */}
-        <RNAnimated.View style={{ opacity: quoteOpacity, paddingHorizontal: 32, paddingVertical: 24, alignItems: 'center' }}>
-          <View style={[styles.quoteSeparator, { backgroundColor: theme.cardBorder }]} />
-          
-          <Text style={{
-            fontFamily: 'CormorantGaramond-Italic',
-            fontSize: 16,
-            color: theme.textSecondary,
-            textAlign: 'center',
-            lineHeight: 24,
-            marginTop: 14,
-            opacity: 0.9,
-            ...headerShadow,
-          }}>
-            "{language === 'hi-IN' && activeQuote.textHindi ? activeQuote.textHindi : activeQuote.text}"
-          </Text>
-          <Text style={{
-            fontFamily: 'DMSans-Regular',
-            fontSize: 9,
-            color: theme.textMuted,
-            textAlign: 'center',
-            letterSpacing: 2,
-            marginTop: 8,
-            textTransform: 'uppercase',
-            opacity: 0.7,
-          }}>
-            — {activeQuote.attribution}
-          </Text>
-
-          <View style={[styles.quoteSeparator, { backgroundColor: theme.cardBorder, marginTop: 14 }]} />
-        </RNAnimated.View>
-      </ScrollView>
-
-      {/* 108 Mala beads */}
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-        <MalaIndicator width={width} theme={theme} />
-      </View>
-
-      <BadgeToast badge={pendingBadge} theme={theme} />
-    </SafeScreen>
+        <BadgeToast badge={pendingBadge} theme={theme} />
+      </SafeScreen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    zIndex: 1,
-  },
   greetingContainer: {
     alignItems: 'center',
     paddingHorizontal: 24,

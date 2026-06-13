@@ -1,12 +1,12 @@
 // components/ui/SafeScreen.tsx
 import { View, ViewProps, ImageBackground } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeSafeAreaViewProps, SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, useThemeConfig } from '../../hooks/useTheme';
 import { useAppStore } from '../../store/appStore';
 import { THEME_IMAGES } from '../../constants/theme-images';
 
-interface SafeScreenProps extends ViewProps {
+interface SafeScreenProps extends NativeSafeAreaViewProps {
   withGradient?: boolean;
 }
 

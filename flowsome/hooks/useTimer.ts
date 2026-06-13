@@ -65,6 +65,11 @@ export function useTimer(options: UseTimerOptions) {
     setCompletedPomodoros(0);
   }, [workMinutes]);
 
+  const cbRefs = useRef({ onWorkComplete, onBreakComplete, onAllComplete });
+  useEffect(() => {
+    cbRefs.current = { onWorkComplete, onBreakComplete, onAllComplete };
+  }, [onWorkComplete, onBreakComplete, onAllComplete]);
+
   useEffect(() => {
     if (status !== 'running') {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -77,19 +82,19 @@ export function useTimer(options: UseTimerOptions) {
           progressShared.value = 1;
           if (phase === 'work') {
             HapticUtils.success();
-            onWorkComplete?.();
+            cbRefs.current.onWorkComplete?.();
             const next = completedPomodoros + 1;
             setCompletedPomodoros(next);
             if (next >= totalPomodoros) {
               setStatus('complete');
-              onAllComplete?.();
+              cbRefs.current.onAllComplete?.();
               return 0;
             } else {
               startBreak();
             }
           } else {
             HapticUtils.success();
-            onBreakComplete?.();
+            cbRefs.current.onBreakComplete?.();
             startWork();
           }
           return 0;
@@ -104,7 +109,7 @@ export function useTimer(options: UseTimerOptions) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [status, phase, completedPomodoros, totalPomodoros, startWork, startBreak, onWorkComplete, onBreakComplete, onAllComplete]);
+  }, [status, phase, completedPomodoros, totalPomodoros, startWork, startBreak, totalSeconds]);
 
   return {
     status,

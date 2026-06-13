@@ -19,20 +19,30 @@ export function DayNightToggle() {
       onPress={toggle}
       activeOpacity={0.7}
       style={{
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.card,
+        backgroundColor: 'rgba(0,0,0,0.65)',
         borderWidth: 1,
-        borderColor: theme.cardBorder,
+        borderColor: 'rgba(255,255,255,0.25)',
+        shadowColor: dayNight === 'day' ? '#FFD700' : '#88CCFF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 10,
+        elevation: 6,
       }}
     >
       <Ionicons
         name={dayNight === 'day' ? 'sunny' : 'moon'}
-        size={16}
-        color={theme.primary}
+        size={20}
+        color={dayNight === 'day' ? '#FFE55C' : '#FFFFFF'}
+        style={{
+          textShadowColor: dayNight === 'day' ? '#FFD700' : '#88CCFF',
+          textShadowOffset: { width: 0, height: 0 },
+          textShadowRadius: 10,
+        }}
       />
     </TouchableOpacity>
   );

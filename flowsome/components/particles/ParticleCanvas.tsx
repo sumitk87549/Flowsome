@@ -6,7 +6,7 @@ import { useTheme } from '../../hooks/useTheme';
 import DustParticles from './DustParticles';
 import SnowParticles from './SnowParticles';
 import RainParticles from './RainParticles';
-import OceanWave from './OceanWave';
+import SplashParticles from './SplashParticles';
 
 interface ParticleCanvasProps {
   breathPhase?: 'inhale' | 'holdIn' | 'exhale' | 'holdOut' | 'idle';
@@ -54,11 +54,11 @@ export function ParticleCanvas({
     const props = { width, height, theme, breathPhase };
 
     switch (particleType) {
-      case 'dust':  return <DustParticles  key={`dust-${mountKey}`}  {...props} />;
-      case 'snow':  return <SnowParticles  key={`snow-${mountKey}`}  {...props} />;
-      case 'rain':  return <RainParticles  key={`rain-${mountKey}`}  {...props} />;
-      case 'ocean': return <OceanWave      key={`ocean-${mountKey}`} {...props} />;
-      default:      return <DustParticles  key={`dust-${mountKey}`}  {...props} />;
+      case 'dust':  return <DustParticles   key={`dust-${mountKey}`}   {...props} />;
+      case 'snow':  return <SnowParticles   key={`snow-${mountKey}`}   {...props} />;
+      case 'rain':  return <RainParticles   key={`rain-${mountKey}`}   {...props} />;
+      case 'ocean': return <SplashParticles key={`ocean-${mountKey}`}  {...props} />;
+      default:      return <DustParticles   key={`dust-${mountKey}`}   {...props} />;
     }
   };
 

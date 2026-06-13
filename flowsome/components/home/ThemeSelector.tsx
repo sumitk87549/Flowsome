@@ -1,14 +1,15 @@
 // components/home/ThemeSelector.tsx — Compact landscape thumbnails
 import { useRef, useEffect } from 'react';
-import { ScrollView, TouchableOpacity, ImageBackground, View, Animated as RNAnimated } from 'react-native';
+import { ScrollView, TouchableOpacity, ImageBackground, View, Text, Animated as RNAnimated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReAnimated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { FlowText } from '../ui/FlowText';
 import { useTheme } from '../../hooks/useTheme';
 import { useAppStore } from '../../store/appStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { THEMES, THEME_ORDER, ThemeId } from '../../constants/themes';
 import { THEME_IMAGES } from '../../constants/theme-images';
-import { HapticUtils } from '../../utils/hapticUtils';
+import { hapticLight } from '../../utils/hapticUtils';
 import { useSFX } from '../../hooks/useAudio';
 
 interface ThemeCardProps {
@@ -20,15 +21,21 @@ interface ThemeCardProps {
 function ThemeCard({ id, isActive, onPress }: ThemeCardProps) {
   const config = THEMES[id];
   const theme = useTheme();
-  const scale = useSharedValue(isActive ? 1.02 : 0.97);
+  
+  const scale = useSharedValue(isActive ? 1.04 : 0.96);
+  const opacity = useSharedValue(isActive ? 1.0 : 0.60);
   const pressScale = useRef(new RNAnimated.Value(1)).current;
+  const language = useSettingsStore((s) => s.language);
+  const isHindi = language === 'hi-IN';
 
   useEffect(() => {
-    scale.value = withSpring(isActive ? 1.02 : 0.97, { damping: 14, stiffness: 100 });
+    scale.value = withSpring(isActive ? 1.04 : 0.96, { damping: 14, stiffness: 100 });
+    opacity.value = withSpring(isActive ? 1.0 : 0.60, { damping: 14, stiffness: 100 });
   }, [isActive]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
+    opacity: opacity.value,
   }));
 
   const handlePressIn = () => {
@@ -51,14 +58,13 @@ function ThemeCard({ id, isActive, onPress }: ThemeCardProps) {
           style={[
             animatedStyle,
             {
-              width: 110,
-              height: 80,
-              borderRadius: 14,
+              width: 115,
+              height: 85,
+              borderRadius: 20,
               overflow: 'hidden',
               borderWidth: isActive ? 2 : 1,
-              borderColor: isActive ? theme.primary : 'rgba(255,255,255,0.08)',
-              backgroundColor: theme.card,
-              opacity: isActive ? 1 : 0.55,
+              borderColor: isActive ? theme.primary : 'rgba(255,255,255,0.12)',
+              backgroundColor: 'rgba(0,0,0,0.42)',
               // Subtle glow for selected
               shadowColor: isActive ? theme.primary : 'transparent',
               shadowOffset: { width: 0, height: 2 },
@@ -93,6 +99,21 @@ function ThemeCard({ id, isActive, onPress }: ThemeCardProps) {
               >
                 {config.name}
               </FlowText>
+              {isHindi && (
+                <Text
+                  style={{
+                    color: 'rgba(255,255,255,0.80)',
+                    fontSize: 9,
+                    fontFamily: 'DMSans-Medium',
+                    textShadowColor: 'rgba(0,0,0,0.8)',
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 3,
+                    marginTop: 1,
+                  }}
+                >
+                  {config.nameHindi}
+                </Text>
+              )}
             </LinearGradient>
           </ImageBackground>
         </ReAnimated.View>
@@ -106,7 +127,7 @@ export function ThemeSelector() {
   const { playRegionSelect } = useSFX();
 
   const handleThemeSelect = (id: ThemeId) => {
-    HapticUtils.medium();
+    hapticLight();
     playRegionSelect();
     setTheme(id);
   };
@@ -115,7 +136,7 @@ export function ThemeSelector() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      snapToInterval={120}
+      snapToInterval={125}
       decelerationRate="fast"
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 2 }}
     >

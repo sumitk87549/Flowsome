@@ -55,19 +55,21 @@ export function BreathingPhaseLabel({ phase, secondsRemaining, theme }: Breathin
       >
         {phaseData.en}
       </Text>
-      {/* Hindi — always visible as cultural undercurrent */}
-      <Text
-        style={{
-          fontSize: 15,
-          marginTop: 4,
-          opacity: 0.8,
-          fontFamily: 'DMSans-Regular',
-          color: theme.textMuted,
-          ...textShadow,
-        }}
-      >
-        {phaseData.hi}
-      </Text>
+      {/* Hindi — only visible in Hindi mode */}
+      {language === 'hi-IN' && (
+        <Text
+          style={{
+            fontSize: 15,
+            marginTop: 4,
+            opacity: 0.8,
+            fontFamily: 'DMSans-Regular',
+            color: theme.textMuted,
+            ...textShadow,
+          }}
+        >
+          {phaseData.hi}
+        </Text>
+      )}
     </View>
   );
 }

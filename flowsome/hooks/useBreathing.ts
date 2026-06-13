@@ -60,6 +60,11 @@ export function useBreathing(pattern: BreathingPattern, options?: UseBreathingOp
     [speakCue]
   );
 
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
   const tick = useCallback(() => {
     setPhaseElapsed((prev) => {
       const next = prev + 0.1; // 100ms ticks
@@ -90,8 +95,8 @@ export function useBreathing(pattern: BreathingPattern, options?: UseBreathingOp
             setBreathingPhase(nextPhase.name as BreathingPhaseString);
             speakPhase(nextPhase.name);
             hapticForBreathingPhase(nextPhase.name);
-            if (options?.onPhaseChange) {
-              options.onPhaseChange(nextPhase.name);
+            if (optionsRef.current?.onPhaseChange) {
+              optionsRef.current.onPhaseChange(nextPhase.name);
             }
           }
         }, 0);
@@ -103,7 +108,7 @@ export function useBreathing(pattern: BreathingPattern, options?: UseBreathingOp
       phaseProgressShared.value = Math.min(next / phaseDuration, 1);
       return next;
     });
-  }, [phaseIndex, cycle, activePhaseDefs, pattern.cycles, storeSetCycle, speakCue, speakPhase, setBreathingPhase, options]);
+  }, [phaseIndex, cycle, activePhaseDefs, pattern.cycles, storeSetCycle, speakCue, speakPhase, setBreathingPhase]);
 
   useEffect(() => {
     if (state === 'running') {

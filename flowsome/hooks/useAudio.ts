@@ -31,6 +31,17 @@ export const SFX_TRACKS: Record<string, AudioSource> = {
   'badge-earned':     require('../assets/audio/sfx/sfx-badge-earned.mp3'),
 };
 
+export const TTS_TRACKS: Record<string, AudioSource> = {
+  'inhale-en': require('../assets/audio/tts/inhale-en.mp3'),
+  'inhale-hi': require('../assets/audio/tts/inhale-hi.mp3'),
+  'hold-en':   require('../assets/audio/tts/hold-en.mp3'),
+  'hold-hi':   require('../assets/audio/tts/hold-hi.mp3'),
+  'exhale-en': require('../assets/audio/tts/exhale-en.mp3'),
+  'exhale-hi': require('../assets/audio/tts/exhale-hi.mp3'),
+  'rest-en':   require('../assets/audio/tts/rest-en.mp3'),
+  'rest-hi':   require('../assets/audio/tts/rest-hi.mp3'),
+};
+
 // ─── Ambient Audio ────────────────────────────────────────────────────────────
 // Loops continuously, changes when theme changes, responds to volume settings.
 export function useAmbientAudio(theme: string, autoPlay: boolean = true) {
@@ -96,6 +107,7 @@ export function useSFX() {
   const play = (player: any, volumeMultiplier: number = 1.0) => {
     if (sfxVolume === 0) return;
     try {
+      player.loop = false; // Force play-once behavior
       player.volume = sfxVolume * volumeMultiplier;
       player.seekTo(0);
       player.play();

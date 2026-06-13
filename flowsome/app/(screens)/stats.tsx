@@ -14,7 +14,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useHistoryStore } from '../../store/historyStore';
 import { SafeScreen } from '../../components/ui/SafeScreen';
 import HeatmapCalendar from '../../components/stats/HeatmapCalendar';
-import { HapticUtils } from '../../utils/hapticUtils';
+import { hapticLight } from '../../utils/hapticUtils';
 
 export default function StatsScreen() {
   const theme = useTheme();
@@ -33,29 +33,29 @@ export default function StatsScreen() {
   const favoriteTheme =
     Object.entries(themeCountMap).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
 
+  const textShadow = {
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  };
+
   return (
     <SafeScreen>
+      <LinearGradient
+        colors={['rgba(0,0,0,0.65)', 'rgba(0,0,0,0.30)', 'rgba(0,0,0,0.55)']}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.container, { paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Gradient header backdrop */}
-        <LinearGradient
-          colors={[theme.gradientStart, theme.background]}
-          style={{
-            position: 'absolute',
-            top: 0, left: 0, right: 0,
-            height: 100,
-            opacity: 0.12,
-          }}
-        />
-
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => {
-              HapticUtils.light();
+              hapticLight();
               if (router.canGoBack()) {
                 router.back();
               } else {
@@ -68,9 +68,10 @@ export default function StatsScreen() {
           </TouchableOpacity>
           <Text style={{
             fontFamily: 'CormorantGaramond-SemiBold',
-            fontSize: 22,
-            color: theme.text,
+            fontSize: 24,
+            color: theme.primary,
             letterSpacing: 1,
+            ...textShadow,
           }}>
             Your Practice
           </Text>
@@ -78,12 +79,7 @@ export default function StatsScreen() {
         </View>
 
         {/* Summary stats row */}
-        <View
-          style={[
-            styles.statsRow,
-            { borderColor: theme.cardBorder },
-          ]}
-        >
+        <View style={styles.statsRow}>
           <StatBox label="Sessions" value={totalSessions.toString()} theme={theme} />
           <StatBox label="Minutes" value={totalMinutes.toString()} theme={theme} />
           <StatBox label="Streak" value={`${streak}d`} theme={theme} />
@@ -121,19 +117,23 @@ function StatBox({ label, value, theme }: StatBoxProps) {
     <View style={styles.statBox}>
       <Text
         style={{
-          color: theme.text,
-          fontSize: 20,
-          fontFamily: 'CormorantGaramond-SemiBold',
+          color: '#FFFFFF',
+          fontSize: 22,
+          fontFamily: 'CormorantGaramond-Medium',
+          textShadowColor: 'rgba(0,0,0,0.5)',
+          textShadowOffset: { width: 0, height: 1 },
+          textShadowRadius: 4,
         }}
       >
         {value}
       </Text>
       <Text
         style={{
-          color: theme.textMuted,
+          color: 'rgba(255,255,255,0.5)',
           fontSize: 10,
-          marginTop: 2,
+          marginTop: 4,
           letterSpacing: 1,
+          fontFamily: 'DMSans-Regular',
         }}
       >
         {label.toUpperCase()}
@@ -159,7 +159,9 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderRadius: 16,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderRadius: 20,
     marginBottom: 24,
     overflow: 'hidden',
   },

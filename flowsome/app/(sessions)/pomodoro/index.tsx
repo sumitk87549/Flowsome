@@ -1,14 +1,14 @@
 // app/(sessions)/pomodoro/index.tsx — Premium: Visual overhaul
-import { View, ScrollView, TouchableOpacity, Text } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeScreen } from '../../../components/ui/SafeScreen';
 import { FlowText } from '../../../components/ui/FlowText';
 import { FlowCard } from '../../../components/ui/FlowCard';
-import { FlowButton } from '../../../components/ui/FlowButton';
 import { useTheme } from '../../../hooks/useTheme';
-import { HapticUtils } from '../../../utils/hapticUtils';
+import { hapticLight, hapticMedium } from '../../../utils/hapticUtils';
 import { IntentionInput } from '../../../components/focus/IntentionInput';
 
 const WORK_OPTIONS = [15, 25, 45, 60, 90];
@@ -24,7 +24,7 @@ export default function PomodoroConfig() {
   const [intention, setIntention] = useState('');
 
   const handleStart = () => {
-    HapticUtils.medium();
+    hapticMedium();
     router.push({
       pathname: '/(sessions)/pomodoro/session',
       params: {
@@ -34,6 +34,12 @@ export default function PomodoroConfig() {
         intention: intention,
       },
     });
+  };
+
+  const textShadow = {
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   };
 
   const OptionRow = ({ label, options, selected, onSelect }: {
@@ -56,16 +62,16 @@ export default function PomodoroConfig() {
           <TouchableOpacity
             key={opt}
             onPress={() => {
-              HapticUtils.light();
+              hapticLight();
               onSelect(opt);
             }}
             style={{
               paddingHorizontal: 18,
               paddingVertical: 10,
               borderRadius: 14,
-              backgroundColor: selected === opt ? theme.primary : theme.card,
+              backgroundColor: selected === opt ? theme.primary : 'rgba(0,0,0,0.50)',
               borderWidth: 1.5,
-              borderColor: selected === opt ? theme.primary : theme.cardBorder,
+              borderColor: selected === opt ? theme.primary : 'rgba(255,255,255,0.15)',
             }}
           >
             <FlowText
@@ -83,9 +89,14 @@ export default function PomodoroConfig() {
 
   return (
     <SafeScreen>
+      <LinearGradient
+        colors={['rgba(0,0,0,0.65)', 'rgba(0,0,0,0.30)', 'rgba(0,0,0,0.55)']}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
         <TouchableOpacity 
-          onPress={() => { HapticUtils.light(); router.back(); }}
+          onPress={() => { hapticLight(); router.back(); }}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -103,14 +114,15 @@ export default function PomodoroConfig() {
           </Text>
         </TouchableOpacity>
 
-        <FlowText
-          variant="heading"
-          size="4xl"
-          color={theme.primary}
-          style={{ marginTop: 4 }}
-        >
+        <Text style={{
+          fontFamily: 'CormorantGaramond-SemiBold',
+          fontSize: 34,
+          color: theme.primary,
+          marginTop: 4,
+          ...textShadow,
+        }}>
           Focus
-        </FlowText>
+        </Text>
         <FlowText variant="body" size="sm" color={theme.textMuted} style={{ marginTop: 2 }}>
           Interval work cycles for mental endurance
         </FlowText>
@@ -135,7 +147,7 @@ export default function PomodoroConfig() {
           selected={count}
           onSelect={setCount}
         />
-        <FlowCard style={{ padding: 18, marginTop: 4, borderWidth: 1, borderColor: theme.cardBorder }}>
+        <FlowCard useBlur={false} style={{ padding: 18, marginTop: 4, backgroundColor: 'rgba(0,0,0,0.50)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 16 }}>
           <FlowText size="sm" color={theme.textSecondary} style={{ textAlign: 'center', lineHeight: 20 }}>
             {count} × {workMin}m work + {breakMin}m break = <FlowText color={theme.primary} size="sm" style={{ fontWeight: '600' }}>{count * (workMin + breakMin)}m</FlowText> total session duration
           </FlowText>
@@ -148,12 +160,27 @@ export default function PomodoroConfig() {
       </ScrollView>
       
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 40 }}>
-        <FlowButton
-          label="Start Focus Session"
-          size="lg"
+        <TouchableOpacity
           onPress={handleStart}
-          style={{ width: '100%', alignItems: 'center' }}
-        />
+          activeOpacity={0.8}
+          style={{
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.primary,
+            borderRadius: 14,
+            paddingVertical: 16,
+          }}
+        >
+          <Text style={{
+            color: theme.background,
+            fontSize: 17,
+            fontFamily: 'DMSans-Medium',
+            letterSpacing: 0.5,
+          }}>
+            Begin Session
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeScreen>
   );

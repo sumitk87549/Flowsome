@@ -1,17 +1,18 @@
 // app/(sessions)/focus/index.tsx — Premium: Visual overhaul
-import { View, ScrollView, TouchableOpacity, Text } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeScreen } from '../../../components/ui/SafeScreen';
 import { FlowText } from '../../../components/ui/FlowText';
 import { FlowCard } from '../../../components/ui/FlowCard';
-import { FlowButton } from '../../../components/ui/FlowButton';
 import { IntentionInput } from '../../../components/focus/IntentionInput';
 import { useTheme } from '../../../hooks/useTheme';
 import { useSessionStore } from '../../../store/sessionStore';
+import { useSettingsStore } from '../../../store/settingsStore';
 import { FOCUS_MODES } from '../../../constants/focus-modes';
-import { HapticUtils } from '../../../utils/hapticUtils';
+import { hapticLight, hapticMedium } from '../../../utils/hapticUtils';
 
 export default function FocusSetup() {
   const theme = useTheme();
@@ -19,12 +20,14 @@ export default function FocusSetup() {
   const { setIntention } = useSessionStore();
   const [selectedModeId, setSelectedModeId] = useState(FOCUS_MODES[0].id);
   const [intention, setIntentionText] = useState('');
+  const language = useSettingsStore((s) => s.language);
+  const isHindi = language === 'hi-IN';
 
   const selectedMode = FOCUS_MODES.find(m => m.id === selectedModeId) ?? FOCUS_MODES[0];
 
   const handleStart = () => {
     setIntention(intention);
-    HapticUtils.medium();
+    hapticMedium();
     router.push({
       pathname: '/(sessions)/focus/session',
       params: {
@@ -36,11 +39,22 @@ export default function FocusSetup() {
     });
   };
 
+  const textShadow = {
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  };
+
   return (
     <SafeScreen>
+      <LinearGradient
+        colors={['rgba(0,0,0,0.65)', 'rgba(0,0,0,0.30)', 'rgba(0,0,0,0.55)']}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
         <TouchableOpacity 
-          onPress={() => { HapticUtils.light(); router.back(); }}
+          onPress={() => { hapticLight(); router.back(); }}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -58,52 +72,65 @@ export default function FocusSetup() {
           </Text>
         </TouchableOpacity>
 
-        <FlowText variant="heading" size="4xl" color={theme.primary} style={{ marginTop: 4 }}>
+        <Text style={{
+          fontFamily: 'CormorantGaramond-SemiBold',
+          fontSize: 34,
+          color: theme.primary,
+          marginTop: 4,
+          ...textShadow,
+        }}>
           Flow
-        </FlowText>
+        </Text>
         <FlowText variant="body" size="sm" color={theme.textMuted} style={{ marginTop: 2 }}>
           Enter a flow state with binaural soundscapes
         </FlowText>
       </View>
       
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, gap: 16, paddingTop: 20, paddingBottom: 160 }}>
-        {FOCUS_MODES.map(mode => (
-          <TouchableOpacity
-            key={mode.id}
-            onPress={() => { HapticUtils.light(); setSelectedModeId(mode.id); }}
-            activeOpacity={0.85}
-          >
-            <FlowCard style={{
-              padding: 18, gap: 6,
-              borderColor: selectedModeId === mode.id ? theme.primary : theme.cardBorder,
-              borderWidth: selectedModeId === mode.id ? 2 : 1,
-              shadowColor: selectedModeId === mode.id ? theme.primary : 'transparent',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: selectedModeId === mode.id ? 0.5 : 0,
-              shadowRadius: 12,
-              elevation: selectedModeId === mode.id ? 6 : 0,
-              opacity: selectedModeId === mode.id ? 1 : 0.75,
-            }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <View style={{ flex: 1 }}>
-                  <FlowText
-                    variant="heading"
-                    size="xl"
-                    color={selectedModeId === mode.id ? theme.primary : theme.text}
-                  >
-                    {mode.name}
-                  </FlowText>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                    <FlowText size="xs" color={theme.textMuted}>{mode.nameHindi}</FlowText>
-                    <FlowText size="xs" color={theme.textMuted}>•</FlowText>
-                    <FlowText size="xs" color={theme.textMuted}>{mode.defaultWorkMinutes}m work / {mode.defaultBreakMinutes}m break</FlowText>
+        {FOCUS_MODES.map(mode => {
+          const isSelected = selectedModeId === mode.id;
+          return (
+            <TouchableOpacity
+              key={mode.id}
+              onPress={() => { hapticLight(); setSelectedModeId(mode.id); }}
+              activeOpacity={0.85}
+            >
+              <FlowCard
+                useBlur={false}
+                style={{
+                  padding: 18,
+                  gap: 6,
+                  backgroundColor: 'rgba(0,0,0,0.50)',
+                  borderWidth: isSelected ? 2 : 1,
+                  borderColor: isSelected ? theme.primary : 'rgba(255,255,255,0.15)',
+                  borderRadius: 16,
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <FlowText
+                      variant="heading"
+                      size="xl"
+                      color={isSelected ? theme.primary : theme.text}
+                    >
+                      {mode.name}
+                    </FlowText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      {isHindi && (
+                        <>
+                          <FlowText size="xs" color={theme.textMuted}>{mode.nameHindi}</FlowText>
+                          <FlowText size="xs" color={theme.textMuted}>•</FlowText>
+                        </>
+                      )}
+                      <FlowText size="xs" color={theme.textMuted}>{mode.defaultWorkMinutes}m work / {mode.defaultBreakMinutes}m break</FlowText>
+                    </View>
                   </View>
                 </View>
-              </View>
-              <FlowText size="sm" color={theme.textSecondary} style={{ marginTop: 4 }}>{mode.description}</FlowText>
-            </FlowCard>
-          </TouchableOpacity>
-        ))}
+                <FlowText size="sm" color={theme.textSecondary} style={{ marginTop: 4 }}>{mode.description}</FlowText>
+              </FlowCard>
+            </TouchableOpacity>
+          );
+        })}
         <IntentionInput
           value={intention}
           onChange={setIntentionText}
@@ -112,12 +139,27 @@ export default function FocusSetup() {
       </ScrollView>
       
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 40 }}>
-        <FlowButton
-          label="Begin Flow Session"
-          size="lg"
+        <TouchableOpacity
           onPress={handleStart}
-          style={{ width: '100%', alignItems: 'center' }}
-        />
+          activeOpacity={0.8}
+          style={{
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.primary,
+            borderRadius: 14,
+            paddingVertical: 16,
+          }}
+        >
+          <Text style={{
+            color: theme.background,
+            fontSize: 17,
+            fontFamily: 'DMSans-Medium',
+            letterSpacing: 0.5,
+          }}>
+            Begin Session
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeScreen>
   );

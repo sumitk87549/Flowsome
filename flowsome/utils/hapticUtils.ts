@@ -34,6 +34,30 @@ function isHapticsEnabled(): boolean {
   return useSettingsStore.getState().hapticsEnabled;
 }
 
+export function hapticLight(): void {
+  if (isHapticsEnabled()) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }
+}
+
+export function hapticMedium(): void {
+  if (isHapticsEnabled()) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+  }
+}
+
+export function hapticHeavy(): void {
+  if (isHapticsEnabled()) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+  }
+}
+
+export function hapticSuccess(): void {
+  if (isHapticsEnabled()) {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }
+}
+
 // NEW — Rising sequence haptic: three pulses escalating (Light → Light → Medium)
 export async function hapticRisingSequence(): Promise<void> {
   if (!isHapticsEnabled()) return;

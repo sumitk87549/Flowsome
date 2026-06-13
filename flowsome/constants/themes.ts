@@ -69,10 +69,10 @@ export const THEMES: Record<ThemeId, ThemeConfig> = {
       orbHold: '#E8920A',
     },
     nightColors: {
-      background: '#0A0820',       // midnight indigo — desert sky
-      backgroundSecondary: '#120E30',
+      background: '#04030A',       // midnight indigo — desert sky
+      backgroundSecondary: '#0A0815',
       gradientStart: '#3A2570',    // deep violet
-      gradientEnd: '#0A0820',
+      gradientEnd: '#020105',
       primary: '#D4A030',          // moonlit gold
       primaryLight: '#F0C060',
       text: '#E8E0F0',             // moonlight white — cool
@@ -121,10 +121,10 @@ export const THEMES: Record<ThemeId, ThemeConfig> = {
       orbHold: '#5CA8E8',
     },
     nightColors: {
-      background: '#04081A',       // near-black navy — starfield depth
-      backgroundSecondary: '#0A1028',
+      background: '#04030A',       // near-black navy — starfield depth
+      backgroundSecondary: '#0A0815',
       gradientStart: '#182860',    // midnight cobalt
-      gradientEnd: '#04081A',
+      gradientEnd: '#020105',
       primary: '#5090E0',          // electric blue-violet
       primaryLight: '#78B0F8',
       text: '#E0E8F8',             // starlight silver
@@ -173,10 +173,10 @@ export const THEMES: Record<ThemeId, ThemeConfig> = {
       orbHold: '#30B060',
     },
     nightColors: {
-      background: '#020E08',       // very dark forest
-      backgroundSecondary: '#041810',
+      background: '#04030A',       // very dark forest
+      backgroundSecondary: '#0A0815',
       gradientStart: '#0A3020',    // deep canopy
-      gradientEnd: '#020E08',
+      gradientEnd: '#020105',
       primary: '#28A868',          // bioluminescent green
       primaryLight: '#48D088',
       text: '#E0F0E8',             // pale lantern light
@@ -225,10 +225,10 @@ export const THEMES: Record<ThemeId, ThemeConfig> = {
       orbHold: '#78A840',
     },
     nightColors: {
-      background: '#060A06',       // almost-black green undertone
-      backgroundSecondary: '#0A100A',
+      background: '#04030A',       // almost-black green undertone
+      backgroundSecondary: '#0A0815',
       gradientStart: '#1A2818',    // deep forest
-      gradientEnd: '#060A06',
+      gradientEnd: '#020105',
       primary: '#68A040',          // phosphorescent green
       primaryLight: '#88C060',
       text: '#D8E0D0',             // pale ghost-green
@@ -277,10 +277,10 @@ export const THEMES: Record<ThemeId, ThemeConfig> = {
       orbHold: '#28B0D0',
     },
     nightColors: {
-      background: '#020C18',       // midnight blue-black
-      backgroundSecondary: '#041420',
+      background: '#04030A',       // midnight blue-black
+      backgroundSecondary: '#0A0815',
       gradientStart: '#0C2838',    // deep ocean
-      gradientEnd: '#020C18',
+      gradientEnd: '#020105',
       primary: '#1CA8C8',          // glowing teal
       primaryLight: '#38C8E0',
       text: '#D8F0F8',             // palest blue-white

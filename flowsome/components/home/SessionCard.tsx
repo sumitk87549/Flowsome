@@ -3,10 +3,10 @@ import { useRef, useEffect } from 'react';
 import { TouchableOpacity, View, Animated as RNAnimated, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { FlowCard } from '../ui/FlowCard';
 import { useTheme } from '../../hooks/useTheme';
-import { HapticUtils } from '../../utils/hapticUtils';
+import { useSettings } from '../../hooks/useSettings';
+import { hapticLight } from '../../utils/hapticUtils';
 
 export interface SessionCardData {
   id: string;
@@ -19,10 +19,10 @@ export interface SessionCardData {
 }
 
 const ACCENT_COLORS = {
-  blue:   { bg: ['rgba(112,184,248,0.12)', 'rgba(64,128,208,0.04)'], icon: '#70B8F8' },
-  orange: { bg: ['rgba(240,160,48,0.12)', 'rgba(180,83,9,0.04)'],   icon: '#F0A030' },
-  purple: { bg: ['rgba(160,140,220,0.12)', 'rgba(100,60,180,0.04)'], icon: '#A08CDC' },
-  green:  { bg: ['rgba(64,200,120,0.12)', 'rgba(40,140,80,0.04)'],   icon: '#40C878' },
+  blue:   '#70B8F8',
+  orange: '#F0A030',
+  purple: '#A08CDC',
+  green:  '#40C878',
 } as const;
 
 export const SESSION_CARDS: SessionCardData[] = [
@@ -71,6 +71,7 @@ interface SessionCardProps {
 
 export function SessionCard({ data, delay = 0 }: SessionCardProps) {
   const theme = useTheme();
+  const { language } = useSettings();
   const router = useRouter();
   const pressScale = useRef(new RNAnimated.Value(1)).current;
   const entranceOpacity = useRef(new RNAnimated.Value(0)).current;
@@ -94,11 +95,11 @@ export function SessionCard({ data, delay = 0 }: SessionCardProps) {
   };
 
   const handlePress = () => {
-    HapticUtils.medium();
+    hapticLight();
     router.push(data.route as any);
   };
 
-  const accentConfig = ACCENT_COLORS[data.accent];
+  const iconColor = ACCENT_COLORS[data.accent];
 
   return (
     <RNAnimated.View style={{
@@ -114,62 +115,68 @@ export function SessionCard({ data, delay = 0 }: SessionCardProps) {
         onPressOut={handlePressOut}
         activeOpacity={1}
       >
-        <FlowCard style={{ padding: 0, minHeight: 170, overflow: 'hidden' }}>
-          <LinearGradient
-            colors={accentConfig.bg}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ padding: 20, flex: 1, justifyContent: 'space-between' }}
-          >
-            {/* Icon row */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <Ionicons name={data.icon as any} size={22} color={accentConfig.icon} />
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.textMuted} style={{ opacity: 0.4 }} />
+        <FlowCard
+          useBlur={false}
+          style={{
+            minHeight: 170,
+            padding: 20,
+            justifyContent: 'space-between',
+            borderRadius: 20,
+            overflow: 'hidden',
+            backgroundColor: 'rgba(0,0,0,0.42)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.12)',
+          }}
+        >
+          {/* Icon row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: 'rgba(255,255,255,0.06)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Ionicons name={data.icon as any} size={22} color={iconColor} />
             </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.textMuted} style={{ opacity: 0.4 }} />
+          </View>
 
-            {/* Title block */}
-            <View style={{ marginTop: 16 }}>
-              <Text style={{
-                fontFamily: 'CormorantGaramond-SemiBold',
-                fontSize: 24,
-                color: theme.text,
-                textShadowColor: 'rgba(0,0,0,0.4)',
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 3,
-              }}>
-                {data.title}
-              </Text>
+          {/* Title block */}
+          <View style={{ marginTop: 16 }}>
+            <Text style={{
+              fontFamily: 'CormorantGaramond-Medium',
+              fontSize: 24,
+              color: '#FFFFFF',
+              textShadowColor: 'rgba(0,0,0,0.5)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 4,
+            }}>
+              {data.title}
+            </Text>
+            {language === 'hi-IN' && (
               <Text style={{
                 fontFamily: 'DMSans-Regular',
                 fontSize: 13,
-                color: theme.textMuted,
+                color: 'rgba(255,255,255,0.40)',
                 marginTop: 2,
               }}>
                 {data.titleHindi}
               </Text>
-            </View>
+            )}
+          </View>
 
-            {/* Subtitle */}
-            <Text style={{
-              fontFamily: 'DMSans-Regular',
-              fontSize: 10,
-              color: theme.textMuted,
-              opacity: 0.7,
-              letterSpacing: 0.5,
-              marginTop: 8,
-            }}>
-              {data.subtitle}
-            </Text>
-          </LinearGradient>
+          {/* Subtitle */}
+          <Text style={{
+            fontFamily: 'DMSans-Regular',
+            fontSize: 10,
+            color: 'rgba(255,255,255,0.60)',
+            marginTop: 8,
+            letterSpacing: 0.5,
+          }}>
+            {data.subtitle}
+          </Text>
         </FlowCard>
       </TouchableOpacity>
     </RNAnimated.View>
