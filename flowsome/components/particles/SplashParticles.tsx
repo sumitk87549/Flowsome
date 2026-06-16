@@ -1,6 +1,6 @@
 // components/particles/SplashParticles.tsx
 import React, { memo, useMemo, useEffect } from 'react';
-import { Canvas, Oval } from '@shopify/react-native-skia';
+import { Canvas, Oval, Group, Blur, LinearGradient, vec } from '@shopify/react-native-skia';
 import {
   useSharedValue,
   useDerivedValue,
@@ -8,6 +8,7 @@ import {
   withTiming,
   cancelAnimation,
   Easing,
+  withDelay,
 } from 'react-native-reanimated';
 
 interface ParticleProps {
@@ -18,10 +19,13 @@ interface ParticleProps {
 }
 
 interface DropSeed {
-  startX: number;
-  initialOffset: number;
-  radius: number;
-  fallDuration: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type: 'static' | 'dripping';
+  delay: number;
+  duration: number;
   opacity: number;
 }
 
@@ -34,39 +38,98 @@ const SplashDrop = memo(function SplashDrop({
   color: string;
   height: number;
 }) {
-  const t = useSharedValue(-seed.initialOffset);
+  const t = useSharedValue(0);
 
   useEffect(() => {
-    t.value = withRepeat(
-      withTiming(height + 60, {
-        duration: seed.fallDuration,
-        easing: Easing.bezier(0.25, 0.1, 0.25, 1), // slowly starts, speeds up, then slows (dripping on glass effect)
-      }),
-      -1,
-      false,
-    );
+    if (seed.type === 'dripping') {
+      t.value = withDelay(
+        seed.delay,
+        withRepeat(
+          withTiming(1, {
+            duration: seed.duration,
+            // Dripping on glass: starts slow, accelerates quickly, then slows down, repeats
+            easing: Easing.bezier(0.5, 0, 0.2, 1),
+          }),
+          -1,
+          false
+        )
+      );
+    } else {
+      // Static drops might slowly slide down a tiny bit or just fade in/out
+      t.value = withDelay(
+        seed.delay,
+        withRepeat(
+          withTiming(1, {
+            duration: seed.duration,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          -1,
+          true
+        )
+      );
+    }
     return () => cancelAnimation(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cy = useDerivedValue(() => Math.max(-50, t.value));
-  
-  // Create a slight sway or zig-zag for the water droplet dripping down
-  const cx = useDerivedValue(() => {
-      const progress = (t.value + seed.initialOffset) / (height + seed.initialOffset + 60);
-      const sway = Math.sin(progress * Math.PI * 4) * 4;
-      return seed.startX + sway;
+  const transform = useDerivedValue(() => {
+    if (seed.type === 'dripping') {
+      // It falls from its start y to the bottom of the screen
+      const currentY = seed.y + t.value * (height + 100 - seed.y);
+      // Slight sway mimicking a jagged dripping path
+      const sway = Math.sin(t.value * Math.PI * 6) * 3;
+      return [
+        { translateX: seed.x + sway },
+        { translateY: currentY },
+      ];
+    } else {
+      // Static drop slowly creeps down slightly
+      return [
+        { translateX: seed.x },
+        { translateY: seed.y + t.value * 10 },
+      ];
+    }
   });
 
   const opacity = useDerivedValue(() => {
-    if (t.value < 0) return 0;
-    // Fade out as it drips off screen
-    if (t.value > height - 60) return seed.opacity * Math.max(0, (height + 40 - t.value) / 100);
-    return seed.opacity;
+    if (seed.type === 'dripping') {
+      // Fade in at start, fade out at very bottom
+      if (t.value < 0.05) return (t.value / 0.05) * seed.opacity;
+      if (t.value > 0.9) return ((1 - t.value) / 0.1) * seed.opacity;
+      return seed.opacity;
+    } else {
+      // Pulse opacity slightly for shimmer effect
+      return seed.opacity * (0.8 + 0.2 * Math.sin(t.value * Math.PI));
+    }
   });
 
+  const w = seed.w;
+  const h = seed.h;
+
   return (
-    // Make them slightly elongated to look like dripping water
-    <Oval x={cx} y={cy} width={seed.radius * 1.5} height={seed.radius * 3} color={color} opacity={opacity} />
+    <Group transform={transform} opacity={opacity}>
+      {/* Drop shadow for depth against the "glass" */}
+      <Oval x={1} y={2} width={w} height={h} color="rgba(0,0,0,0.3)">
+        <Blur blur={2} />
+      </Oval>
+
+      {/* Main drop body with simulated refraction */}
+      <Oval x={0} y={0} width={w} height={h}>
+        <LinearGradient
+          start={vec(0, 0)}
+          end={vec(0, h)}
+          colors={['rgba(20,20,20,0.2)', 'rgba(255,255,255,0.5)']}
+        />
+      </Oval>
+
+      {/* Subtle theme tint */}
+      <Oval x={0} y={0} width={w} height={h} color={color} opacity={0.15} />
+
+      {/* Primary top-left highlight */}
+      <Oval x={w * 0.15} y={h * 0.1} width={w * 0.4} height={h * 0.3} color="rgba(255,255,255,0.9)" />
+      
+      {/* Secondary bottom reflection */}
+      <Oval x={w * 0.3} y={h * 0.7} width={w * 0.4} height={h * 0.2} color="rgba(255,255,255,0.6)" />
+    </Group>
   );
 });
 
@@ -76,23 +139,44 @@ export default function SplashParticles({
   theme,
   breathPhase,
 }: ParticleProps) {
-  const PARTICLE_COUNT = 15; // very few drops
+  const STATIC_COUNT = 30; // Real drops sitting on the glass
+  const DRIP_COUNT = 8;    // Few drops falling
 
-  const seeds: DropSeed[] = useMemo(
-    () =>
-      Array(PARTICLE_COUNT)
-        .fill(0)
-        .map(() => {
-          return {
-            startX:        10 + Math.random() * (width - 20),
-            initialOffset: 50 + Math.random() * height * 1.5, // spread out start times
-            radius:        1.5 + Math.random() * 2, // small drops
-            fallDuration:  12000 + Math.random() * 8000, // very slow dripping
-            opacity:       0.4 + Math.random() * 0.4,
-          };
-        }),
-    [width, height],
-  );
+  const seeds: DropSeed[] = useMemo(() => {
+    const drops: DropSeed[] = [];
+    
+    // Generate static drops
+    for (let i = 0; i < STATIC_COUNT; i++) {
+      const radius = 1.5 + Math.random() * 3;
+      drops.push({
+        x: 10 + Math.random() * (width - 20),
+        y: Math.random() * height,
+        w: radius * 2,
+        h: radius * 2.2, // Slightly elongated
+        type: 'static',
+        delay: Math.random() * 5000,
+        duration: 4000 + Math.random() * 4000,
+        opacity: 0.4 + Math.random() * 0.4,
+      });
+    }
+
+    // Generate dripping drops
+    for (let i = 0; i < DRIP_COUNT; i++) {
+      const radius = 2 + Math.random() * 2;
+      drops.push({
+        x: 10 + Math.random() * (width - 20),
+        y: -50 + (Math.random() * height * 0.5), // Start anywhere above or slightly below the top edge
+        w: radius * 2,
+        h: radius * 3.5, // More elongated for moving drops
+        type: 'dripping',
+        delay: Math.random() * 15000,
+        duration: 8000 + Math.random() * 8000, // Very slow dripping
+        opacity: 0.5 + Math.random() * 0.4,
+      });
+    }
+
+    return drops;
+  }, [width, height]);
 
   if (width === 0) return null;
 
@@ -102,7 +186,7 @@ export default function SplashParticles({
         <SplashDrop
           key={i}
           seed={seed}
-          color={theme.particle} // This will be the theme's particle color (cyan/white for Andaman)
+          color={theme.particle}
           height={height}
         />
       ))}
