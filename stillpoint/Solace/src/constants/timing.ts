@@ -1,0 +1,60 @@
+// All timing values in milliseconds. Never hardcode ms values in components — import from here.
+export const TIMING = {
+  // Home screen entry sequence
+  HOME_BG_FADE: 1100,
+  HOME_ORB_FADE: 900,
+  HOME_WORDMARK_DELAY: 850,
+  HOME_WORDMARK_DURATION: 950,
+  HOME_TAGLINE_DELAY: 1050,
+  HOME_TAGLINE_DURATION: 700,
+  HOME_DOT_FIRST_DELAY: 1350,
+  HOME_DOT_STAGGER: 90,
+  HOME_DOT_DURATION: 350,
+  HOME_BEGIN_DELAY: 1700,
+  HOME_BEGIN_DURATION: 750,
+  HOME_STAT_DELAY: 2000,
+  HOME_STAT_DURATION: 600,
+
+  // Begin tap exit sequence
+  BEGIN_PRESS_DURATION: 120,
+  BEGIN_FADE_OUT_START: 250,
+  BEGIN_FADE_OUT_DURATION: 350,
+  BEGIN_DOTS_FADE: 400,
+  BEGIN_BG_TRANSITION: 550,
+  BEGIN_BG_DURATION: 700,
+  SCREEN_B_FADE_IN: 1100,
+  SCREEN_B_FADE_DURATION: 600,
+
+  // AmbientOrb breathing
+  ORB_BREATHE_HALF_PERIOD: 5500,
+
+  // Animations (shared)
+  CHIP_TRANSITION: 150,
+  TOGGLE_TRANSITION: 250,
+  TILE_TRANSITION: 200,
+  SENSORY_CARD_TRANSITION: 200,
+
+  // Work session timer
+  TIMER_TICK_INTERVAL: 1000,
+
+  // Transition durations
+  WORK_END_TRANSITION: 600,
+  REST_END_TRANSITION: 500,
+
+  // Panel animation
+  PANEL_FADE_IN: 400,
+  PANEL_FADE_OUT: 300,
+  PANEL_EMPTY_GAP: 180,
+
+  // Sheet spring
+  SHEET_SPRING_STIFFNESS: 280,
+  SHEET_SPRING_DAMPING: 36,
+  SHEET_SPRING_MASS: 1,
+
+  // Begin press feedback
+  BEGIN_PRESSED_OPACITY_DURATION: 120,
+
+  // Focus Intention auto-advance
+  FOCUS_AUTO_ADVANCE_MS: 3000,
+  FOCUS_TILE_NAV_DELAY: 120,
+} as const;

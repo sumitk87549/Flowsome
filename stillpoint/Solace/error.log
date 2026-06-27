@@ -1,0 +1,13 @@
+Starting project at /home/sumit/Documents/GitHub/Flowsome/stillpoint/Solace
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+ ERROR  An unknown error occurred while installing React Native DevTools. Details:
+
+LaunchProcess: failed to execvp:
+/home/sumit/.cache/dotslash/af/5aa55d5d0401a9f3a438c9deb082205f28e353/React
+[684100:0627/162345.645230:FATAL:content/browser/zygote_host/zygote_host_impl_linux.cc:207] Check failed: . : Invalid argument (22)
+
+Waiting on http://localhost:8089
+Logs for your project will appear below.
+Killed
