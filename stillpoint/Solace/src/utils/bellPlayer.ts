@@ -16,12 +16,12 @@ export function useBell(bellName: BellName) {
   const player = useAudioPlayer(BELL_ASSETS[bellName]);
 
   const play = useCallback(() => {
-    const allowed = settings.sensoryProfile === 'full' || settings.sensoryProfile === 'still';
+    const allowed = settings.soundEnabled && settings.bellsEnabled;
     if (!allowed) return;
     // One-shot: rewind to start, then play
     player.seekTo(0);
     player.play();
-  }, [player, settings.sensoryProfile]);
+  }, [player, settings.soundEnabled, settings.bellsEnabled]);
 
   return { play };
 }

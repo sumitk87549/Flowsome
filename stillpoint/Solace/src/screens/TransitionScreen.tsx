@@ -37,11 +37,14 @@ import type { RestMode } from '@/types/session';
 const REST_MODE_DISPLAY_NAMES: Record<RestMode, string> = {
   eyesAway:       'Eyes Away',
   listen:         'Listen',
+  quietListening: 'Quiet Listening',
   breatheAndDrift:'Breathe & Drift',
   quickSettle:    'Quick Settle',
   moveAndSee:     'Move & See',
+  move:           'Move',
   senseAndGround: 'Sense & Ground',
   storyMoment:    'Story Moment',
+  storyGarden:    'Story Garden',
   memory:         'Memory',
   walk:           'Walk',
 };

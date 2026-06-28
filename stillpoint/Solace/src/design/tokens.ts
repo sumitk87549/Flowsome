@@ -3,32 +3,36 @@ export type ThemeMode = 'system' | 'dawn' | 'night';
 export const NIGHT_THEME = {
   mode: 'night' as const,
   colors: {
-    background: '#0B0D10', // ink
-    surface: '#101318',
-    workBg: '#0E1624', // deepBlue
-    restBg: '#10201A', // forestNight
-    text: '#EEE6D8', // warmCream
-    textMuted: 'rgba(238,230,216,0.68)',
-    accent: '#D59A72', // amber
-    accentSecondary: '#94B8A2', // sage
-    line: 'rgba(238,230,216,0.12)',
-    danger: '#B36B6B', // muted rose
+    background: '#080B10',
+    backgroundDeep: '#0D1320',
+    surface: 'rgba(255, 250, 238, 0.07)',
+    surfaceStrong: 'rgba(255, 250, 238, 0.12)',
+    textPrimary: '#F1E9DA',
+    textSecondary: 'rgba(241, 233, 218, 0.72)',
+    textMuted: 'rgba(241, 233, 218, 0.50)',
+    line: 'rgba(241, 233, 218, 0.14)',
+    accent: '#D39A72',
+    accentSoft: 'rgba(211, 154, 114, 0.22)',
+    sage: '#91B7A0',
+    danger: '#D98C8C',
   },
 };
 
 export const DAWN_THEME = {
   mode: 'dawn' as const,
   colors: {
-    background: '#F4EFE5', // paper
-    surface: '#E8E1D3', // mist
-    workBg: '#DDE7E6', // skyWash
-    restBg: '#E8E1D3', // mist
-    text: '#25231F', // inkText
-    textMuted: 'rgba(37,35,31,0.62)',
-    accent: '#C9825E', // clay
-    accentSecondary: '#6E927D', // leaf
-    line: 'rgba(37,35,31,0.12)',
-    danger: '#A85A5A',
+    background: '#F3EEE4',
+    backgroundDeep: '#E7DED0',
+    surface: 'rgba(255, 255, 255, 0.48)',
+    surfaceStrong: 'rgba(255, 255, 255, 0.72)',
+    textPrimary: '#25231F',
+    textSecondary: 'rgba(37, 35, 31, 0.70)',
+    textMuted: 'rgba(37, 35, 31, 0.52)',
+    line: 'rgba(37, 35, 31, 0.13)',
+    accent: '#C9825E',
+    accentSoft: 'rgba(201, 130, 94, 0.20)',
+    sage: '#6E927D',
+    danger: '#B56F6F',
   },
 };
 
@@ -36,14 +40,16 @@ export type ThemeTokens = {
   mode: ThemeMode;
   colors: {
     background: string;
+    backgroundDeep: string;
     surface: string;
-    workBg: string;
-    restBg: string;
-    text: string;
+    surfaceStrong: string;
+    textPrimary: string;
+    textSecondary: string;
     textMuted: string;
-    accent: string;
-    accentSecondary: string;
     line: string;
+    accent: string;
+    accentSoft: string;
+    sage: string;
     danger: string;
   };
 };

@@ -21,18 +21,42 @@ export function ConfirmSheet({
   cancelLabel = 'Cancel',
 }: ConfirmSheetProps) {
   const theme = useTheme();
+  const isNight = theme.mode === 'night';
+
+  // Always fully opaque card — no transparency bleed-through
+  const cardBg = isNight ? '#1A1F2A' : '#F5F0EA';
+  const dividerColor = isNight ? 'rgba(241,233,218,0.10)' : 'rgba(37,35,31,0.10)';
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      {/* Dark scrim — always dark so background content is masked properly */}
       <View style={styles.overlay}>
-        <View style={[styles.sheet, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
+        <View style={[styles.sheet, { backgroundColor: cardBg }]}>
+          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>{title}</Text>
+
+          {/* Divider */}
+          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+
           <View style={styles.actions}>
-            <Pressable style={styles.button} onPress={onCancel}>
-              <Text style={[styles.buttonText, { color: theme.colors.textMuted }]}>{cancelLabel}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+              onPress={onCancel}
+            >
+              <Text style={[styles.buttonText, { color: theme.colors.textMuted }]}>
+                {cancelLabel}
+              </Text>
             </Pressable>
-            <Pressable style={[styles.button, styles.confirmButton]} onPress={onConfirm}>
-              <Text style={[styles.buttonText, { color: theme.colors.danger }]}>{confirmLabel}</Text>
+
+            {/* Vertical separator */}
+            <View style={[styles.verticalDivider, { backgroundColor: dividerColor }]} />
+
+            <Pressable
+              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+              onPress={onConfirm}
+            >
+              <Text style={[styles.buttonText, { color: theme.colors.danger, fontFamily: FONT.medium }]}>
+                {confirmLabel}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -44,35 +68,55 @@ export function ConfirmSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // Deep opaque scrim so nothing bleeds through
+    backgroundColor: 'rgba(5, 7, 12, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 40,
   },
   sheet: {
-    width: '80%',
-    borderRadius: 16,
-    padding: 24,
+    width: '100%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    // Shadow for depth
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 12,
   },
   title: {
-    fontFamily: FONT.regular,
-    fontSize: FS.lg,
+    fontFamily: FONT.medium,
+    fontSize: FS.base,
     textAlign: 'center',
-    marginBottom: 32,
-    letterSpacing: TRACKING.wide,
+    lineHeight: 24,
+    paddingHorizontal: 28,
+    paddingTop: 28,
+    paddingBottom: 24,
+    letterSpacing: 0.3,
+  },
+  divider: {
+    height: 1,
+    marginHorizontal: 0,
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
   },
   button: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  confirmButton: {
+  buttonPressed: {
+    opacity: 0.6,
+  },
+  verticalDivider: {
+    width: 1,
   },
   buttonText: {
     fontFamily: FONT.regular,
     fontSize: FS.base,
-    letterSpacing: TRACKING.base,
+    letterSpacing: TRACKING.tight,
   },
 });

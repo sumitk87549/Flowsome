@@ -4,20 +4,34 @@ import { readJson, writeJson, STORAGE_KEYS } from '@/utils/storage';
 
 const DEFAULT_SETTINGS: SolaceSettings = {
   themeMode: 'system',
-  sensoryProfile: 'full',
-  transitionsOnly: false,
+  
   workDuration: 25,
   shortRestDuration: 5,
   longRestDuration: 15,
   sessionsUntilLongRest: 4,
+  
+  restStyle: 'auto',
+  visualIntensity: 'balanced',
+  showReturnReflection: true,
+  
+  soundEnabled: true,
+  bellsEnabled: true,
+  ambientEnabled: true,
+  ambientSound: 'forest',
+  hapticsEnabled: true,
+  bellVolume: 'medium',
+  
+  reducedMotion: false,
+  particlesEnabled: true,
+  fullScreenMode: true,
+  
   autoStartRest: false,
   autoStartWork: false,
-  restStyle: 'auto',
-  ambientSound: 'forest',
+  keepScreenAwake: true,
+
+  transitionsOnly: false,
   intentionWordEnabled: true,
   settleNoticeEnabled: true,
-  eveningNoteEnabled: false,
-  eveningNoteTime: '21:00',
 };
 
 interface SettingsContextValue {

@@ -1,18 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import { useSettings } from '@/context/SettingsContext';
 import { useTheme } from '@/design/theme';
 import { FONT, FS, TRACKING } from '@/constants/typography';
-import { TIMING } from '@/constants/timing';
 
 const SCREEN_HEIGHT = Dimensions.get('screen').height;
-const SHEET_TOP = SCREEN_HEIGHT * 0.3; // 70% height
-const SPRING_CONFIG = {
-  stiffness: TIMING.SHEET_SPRING_STIFFNESS,
-  damping: TIMING.SHEET_SPRING_DAMPING,
-  mass: TIMING.SHEET_SPRING_MASS,
-};
 
 interface SessionSetupSheetProps {
   isOpen: boolean;
@@ -23,125 +16,181 @@ const PRESETS = [
   { id: 'classic', label: 'Classic', work: 25, rest: 5, long: 15, cycles: 4 },
   { id: 'deep', label: 'Deep Work', work: 50, rest: 10, long: 20, cycles: 2 },
   { id: 'gentle', label: 'Gentle Start', work: 15, rest: 5, long: 15, cycles: 3 },
+  { id: 'custom', label: 'Custom', work: -1, rest: -1, long: -1, cycles: -1 },
 ];
 
 export function SessionSetupSheet({ isOpen, onClose }: SessionSetupSheetProps) {
   const { settings, updateSetting } = useSettings();
   const theme = useTheme();
-  const translateY = useSharedValue(SCREEN_HEIGHT);
+  
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.95);
+  const pointerEvents = isOpen ? 'auto' : 'none';
 
   useEffect(() => {
     if (isOpen) {
-      translateY.value = withSpring(SHEET_TOP, SPRING_CONFIG);
+      opacity.value = withTiming(1, { duration: 250 });
+      scale.value = withSpring(1, { damping: 20, stiffness: 200 });
     } else {
-      translateY.value = withSpring(SCREEN_HEIGHT, SPRING_CONFIG);
+      opacity.value = withTiming(0, { duration: 200 });
+      scale.value = withTiming(0.95, { duration: 200 });
     }
-  }, [isOpen, translateY]);
+  }, [isOpen, opacity, scale]);
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+  const modalStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+  
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
   }));
 
   const applyPreset = (preset: typeof PRESETS[0]) => {
-    updateSetting('workDuration', preset.work);
-    updateSetting('shortRestDuration', preset.rest);
-    updateSetting('longRestDuration', preset.long);
-    updateSetting('sessionsUntilLongRest', preset.cycles);
-    onClose();
+    if (preset.id !== 'custom') {
+      updateSetting('workDuration', preset.work);
+      updateSetting('shortRestDuration', preset.rest);
+      updateSetting('longRestDuration', preset.long);
+      updateSetting('sessionsUntilLongRest', preset.cycles);
+    }
   };
 
+  const currentPreview = `${settings.workDuration} min focus · ${settings.shortRestDuration} min rest · ${settings.longRestDuration} min long rest`;
+
   return (
-    <>
-      {isOpen && (
+    <View style={StyleSheet.absoluteFill} pointerEvents={pointerEvents}>
+      <Animated.View style={[styles.backdrop, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      )}
-      <Animated.View style={[styles.sheet, { backgroundColor: theme.colors.surface }, sheetStyle]}>
-        <View style={styles.handle} />
-        
-        <Text style={[styles.title, { color: theme.colors.text }]}>Session Setup</Text>
-        
-        <Text style={[styles.sectionLabel, { color: theme.colors.textMuted }]}>Presets</Text>
-        <View style={styles.presetsGrid}>
-          {PRESETS.map(preset => (
-            <Pressable 
-              key={preset.id} 
-              style={[styles.presetCard, { backgroundColor: theme.colors.background }]}
-              onPress={() => applyPreset(preset)}
-            >
-              <Text style={[styles.presetLabel, { color: theme.colors.text }]}>{preset.label}</Text>
-              <Text style={[styles.presetDetails, { color: theme.colors.textMuted }]}>
-                {preset.work}m / {preset.rest}m
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        
-        <View style={styles.footer}>
-          <Pressable onPress={() => { onClose(); }}>
-            <Text style={[styles.closeText, { color: theme.colors.textMuted }]}>Done</Text>
-          </Pressable>
-        </View>
       </Animated.View>
-    </>
+      
+      <View style={styles.centeredContainer} pointerEvents="box-none">
+        <Animated.View style={[styles.card, { backgroundColor: theme.colors.surfaceStrong }, modalStyle]}>
+          
+          <Text style={[styles.previewText, { color: theme.colors.textMuted }]}>
+            {currentPreview}
+          </Text>
+          
+          <View style={styles.presetsGrid}>
+            {PRESETS.map(preset => {
+              const isSelected = preset.id !== 'custom'
+                ? settings.workDuration === preset.work && settings.shortRestDuration === preset.rest
+                : false; // logic for custom selected
+
+              return (
+                <Pressable 
+                  key={preset.id} 
+                  style={[
+                    styles.presetCard, 
+                    { 
+                      backgroundColor: isSelected ? theme.colors.accent : theme.colors.surface,
+                      borderColor: isSelected ? theme.colors.accent : 'transparent',
+                    }
+                  ]}
+                  onPress={() => applyPreset(preset)}
+                >
+                  <Text style={[styles.presetLabel, { color: isSelected ? theme.colors.background : theme.colors.textPrimary }]}>
+                    {preset.label}
+                  </Text>
+                  {preset.id !== 'custom' && (
+                    <Text style={[styles.presetDetails, { color: isSelected ? theme.colors.background : theme.colors.textMuted }]}>
+                      {preset.work}m / {preset.rest}m
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.actions}>
+            <Pressable 
+              style={[styles.primaryButton, { backgroundColor: theme.colors.textPrimary }]} 
+              onPress={onClose}
+            >
+              <Text style={[styles.primaryButtonText, { color: theme.colors.background }]}>Start Session</Text>
+            </Pressable>
+            
+            <Pressable 
+              style={styles.secondaryButton} 
+              onPress={onClose}
+            >
+              <Text style={[styles.secondaryButtonText, { color: theme.colors.textMuted }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
+  backdrop: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignSelf: 'center',
-    marginBottom: 24,
+  centeredContainer: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  title: {
-    fontFamily: FONT.regular,
-    fontSize: FS.lg,
-    marginBottom: 24,
-    letterSpacing: TRACKING.wide,
+  card: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  sectionLabel: {
-    fontFamily: FONT.regular,
+  previewText: {
+    fontFamily: FONT.medium,
     fontSize: FS.sm,
-    marginBottom: 12,
+    textAlign: 'center',
+    marginBottom: 24,
+    letterSpacing: 0.5,
   },
   presetsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+    marginBottom: 32,
   },
   presetCard: {
-    width: '47%',
+    width: '48%',
     padding: 16,
     borderRadius: 16,
+    borderWidth: 1,
   },
   presetLabel: {
-    fontFamily: FONT.regular,
+    fontFamily: FONT.medium,
     fontSize: FS.base,
     marginBottom: 4,
   },
   presetDetails: {
-    fontFamily: FONT.light,
+    fontFamily: FONT.regular,
     fontSize: FS.xs,
   },
-  footer: {
-    marginTop: 40,
+  actions: {
     alignItems: 'center',
   },
-  closeText: {
-    fontFamily: FONT.regular,
+  primaryButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  primaryButtonText: {
+    fontFamily: FONT.medium,
     fontSize: FS.base,
-  }
+  },
+  secondaryButton: {
+    padding: 12,
+  },
+  secondaryButtonText: {
+    fontFamily: FONT.regular,
+    fontSize: FS.sm,
+  },
 });

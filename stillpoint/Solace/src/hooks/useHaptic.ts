@@ -10,13 +10,9 @@ export function useHaptic() {
       style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light,
       isTransition: boolean = false
     ) => {
-      const { sensoryProfile, transitionsOnly } = settings;
+      const { hapticsEnabled, transitionsOnly } = settings;
 
-      // screenOnly — no haptics at all
-      if (sensoryProfile === 'screenOnly') return;
-
-      // still — no haptics at all
-      if (sensoryProfile === 'still') return;
+      if (!hapticsEnabled) return;
 
       // transitionsOnly — only fire for transition-moment haptics
       if (transitionsOnly && !isTransition) return;

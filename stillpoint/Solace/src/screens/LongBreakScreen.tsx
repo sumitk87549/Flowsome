@@ -71,7 +71,7 @@ function LongBreakTile({ option, scaleValue, onPress, onPressIn, onPressOut }: L
         onPressIn={onPressIn}
         onPressOut={onPressOut}
       >
-        <Text style={[styles.tileLabel, { color: theme.colors.text }]}>{option.label}</Text>
+        <Text style={[styles.tileLabel, { color: theme.colors.textPrimary }]}>{option.label}</Text>
         <Text style={[styles.tileDescriptor, { color: theme.colors.textMuted }]}>{option.descriptor}</Text>
       </Pressable>
     </Animated.View>
@@ -133,7 +133,7 @@ export default function LongBreakScreen({ navigation }: Props) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <BackButton style={styles.backButton} />
-      <Animated.Text style={[styles.headline, headlineStyle, { color: theme.colors.text }]}>
+      <Animated.Text style={[styles.headline, headlineStyle, { color: theme.colors.textPrimary }]}>
         You've earned a longer rest.
       </Animated.Text>
 

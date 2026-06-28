@@ -1,32 +1,22 @@
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   SafeAreaView,
+  Pressable,
+  Alert,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
 import { useSettings } from '@/context/SettingsContext';
 import { COLORS } from '@/constants/colors';
 import { FONT, FS } from '@/constants/typography';
-import SensoryProfileCard from '@/components/shared/SensoryProfileCard';
 import ToggleRow from '@/components/shared/ToggleRow';
 import ChipRow from '@/components/shared/ChipRow';
-import { SensoryProfile, AmbientSound, RestStyle } from '@/types/settings';
+import { AmbientSound, RestStyle, ThemeMode, BellVolume } from '@/types/settings';
 import { BackButton } from '@/components/shared/BackButton';
 import { useTheme } from '@/design/theme';
-
-const SENSORY_PROFILES: { profile: SensoryProfile; label: string; descriptor: string }[] = [
-  { profile: 'full', label: 'Full', descriptor: 'Sound, haptics & motion' },
-  { profile: 'still', label: 'Still', descriptor: 'Sound & motion only' },
-  { profile: 'quiet', label: 'Quiet', descriptor: 'Motion only' },
-  { profile: 'screenOnly', label: 'Screen', descriptor: 'Visual only' },
-];
+import { ConfirmSheet } from '@/components/shared/ConfirmSheet';
 
 const WORK_DURATION_OPTIONS = [
   { label: '15m', value: 15 },
@@ -38,7 +28,9 @@ const WORK_DURATION_OPTIONS = [
 ];
 
 const SHORT_REST_OPTIONS = [
+  { label: '3m', value: 3 },
   { label: '5m', value: 5 },
+  { label: '7m', value: 7 },
   { label: '10m', value: 10 },
   { label: '15m', value: 15 },
 ];
@@ -46,6 +38,7 @@ const SHORT_REST_OPTIONS = [
 const LONG_REST_OPTIONS = [
   { label: '15m', value: 15 },
   { label: '20m', value: 20 },
+  { label: '25m', value: 25 },
   { label: '30m', value: 30 },
 ];
 
@@ -55,54 +48,57 @@ const SESSIONS_UNTIL_LONG_OPTIONS = [
   { label: '4', value: 4 },
 ];
 
-const AMBIENT_SOUND_OPTIONS = [
-  { label: 'Forest', value: 'forest' },
-  { label: 'Rain', value: 'rain' },
-  { label: 'Ocean', value: 'ocean' },
-  { label: 'Desert', value: 'desert' },
-  { label: 'Mountain', value: 'mountain' },
-];
-
 const REST_STYLE_OPTIONS = [
   { label: 'Auto', value: 'auto' },
-  { label: 'Listen', value: 'listen' },
-  { label: 'Breathe', value: 'breathe' },
-  { label: 'Drift', value: 'drift' },
-  { label: 'Quick', value: 'quickSettle' },
-  { label: 'Move', value: 'move' },
-  { label: 'Sense', value: 'senseAndGround' },
-  { label: 'Story', value: 'storyMoment' },
+  { label: 'Eyes Away', value: 'eyesAway' },
+  { label: 'Move & See', value: 'move' },
+  { label: 'Sense Grounding', value: 'senseAndGround' },
+  { label: 'Quiet Listening', value: 'quietListening' },
+  { label: 'Story Garden', value: 'storyGarden' },
 ];
 
-const EVENING_TIME_OPTIONS = [
-  { label: '19:00', value: '19:00' },
-  { label: '20:00', value: '20:00' },
-  { label: '21:00', value: '21:00' },
-  { label: '21:30', value: '21:30' },
-  { label: '22:00', value: '22:00' },
-  { label: '22:30', value: '22:30' },
+const VISUAL_INTENSITY_OPTIONS = [
+  { label: 'Minimal', value: 'minimal' },
+  { label: 'Balanced', value: 'balanced' },
+  { label: 'Immersive', value: 'immersive' },
+];
+
+const AMBIENT_SOUND_OPTIONS = [
+  { label: 'None', value: 'none' },
+  { label: 'Rain', value: 'rain' },
+  { label: 'Forest', value: 'forest' },
+  { label: 'Ocean', value: 'ocean' },
+  { label: 'Night', value: 'night' },
+  { label: 'Wind', value: 'wind' },
+];
+
+const BELL_VOLUME_OPTIONS = [
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+];
+
+const THEME_MODE_OPTIONS = [
+  { label: 'System', value: 'system' },
+  { label: 'Dawn', value: 'dawn' },
+  { label: 'Night', value: 'night' },
 ];
 
 export default function SettingsScreen() {
   const { settings, updateSetting } = useSettings();
-
-  // Evening note time-picker animated height
-  const eveningPickerHeight = useSharedValue(settings.eveningNoteEnabled ? 60 : 0);
-
-  const eveningPickerStyle = useAnimatedStyle(() => ({
-    height: eveningPickerHeight.value,
-    overflow: 'hidden',
-  }));
-
-  function handleEveningNoteToggle(val: boolean) {
-    updateSetting('eveningNoteEnabled', val);
-    eveningPickerHeight.value = withSpring(val ? 60 : 0, {
-      stiffness: 200,
-      damping: 24,
-    });
-  }
-
   const theme = useTheme();
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleResetSettings = () => {
+    // Basic reset for core settings
+    updateSetting('workDuration', 25);
+    updateSetting('shortRestDuration', 5);
+    updateSetting('longRestDuration', 15);
+    updateSetting('sessionsUntilLongRest', 4);
+    setShowResetConfirm(false);
+  };
+
+  const currentRhythm = `${settings.workDuration} / ${settings.shortRestDuration} / ${settings.longRestDuration}`;
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
@@ -114,122 +110,192 @@ export default function SettingsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <BackButton />
-          <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Settings</Text>
+          <View style={{ marginLeft: 16 }}>
+            <Text style={[styles.screenTitle, { color: theme.colors.textPrimary }]}>Settings</Text>
+            <Text style={[styles.rhythmSubtitle, { color: theme.colors.textMuted }]}>
+              Current Rhythm · {currentRhythm}
+            </Text>
+          </View>
         </View>
 
-        {/* ── Zone 1: Sensory ── */}
-        <Text style={[styles.zoneLabel, { color: theme.colors.textMuted }]}>Sensory</Text>
-        <View style={styles.cardsRow}>
-          {SENSORY_PROFILES.map((item) => (
-            <SensoryProfileCard
-              key={item.profile}
-              profile={item.profile}
-              label={item.label}
-              descriptor={item.descriptor}
-              isSelected={settings.sensoryProfile === item.profile}
-              onSelect={() => updateSetting('sensoryProfile', item.profile)}
-            />
-          ))}
-        </View>
-
-        <View style={styles.toggleSection}>
-          <ToggleRow
-            label="Haptics on transitions only"
-            subLabel="Suppress haptics during rest panels"
-            value={settings.transitionsOnly}
-            onValueChange={(val) => updateSetting('transitionsOnly', val)}
+        {/* ── Section 1: Session rhythm ── */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.zoneLabel, { color: theme.colors.textPrimary }]}>Session Rhythm</Text>
+          <ChipRow
+            label="Work Duration"
+            options={WORK_DURATION_OPTIONS}
+            selectedValue={settings.workDuration}
+            onSelect={(val) => updateSetting('workDuration', val as number)}
+          />
+          <ChipRow
+            label="Short Rest"
+            options={SHORT_REST_OPTIONS}
+            selectedValue={settings.shortRestDuration}
+            onSelect={(val) => updateSetting('shortRestDuration', val as number)}
+          />
+          <ChipRow
+            label="Long Rest"
+            options={LONG_REST_OPTIONS}
+            selectedValue={settings.longRestDuration}
+            onSelect={(val) => updateSetting('longRestDuration', val as number)}
+          />
+          <ChipRow
+            label="Long Rest After Cycles"
+            options={SESSIONS_UNTIL_LONG_OPTIONS}
+            selectedValue={settings.sessionsUntilLongRest}
+            onSelect={(val) => updateSetting('sessionsUntilLongRest', val as number)}
           />
         </View>
 
-        {/* ── Zone 2: Session Timing ── */}
-        <Text style={[styles.zoneLabel, styles.zoneGap, { color: theme.colors.textMuted }]}>Session Timing</Text>
+        {/* ── Section 2: Rest guidance ── */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.zoneLabel, { color: theme.colors.textPrimary }]}>Rest Guidance</Text>
+          <ChipRow
+            label="Default Rest Path"
+            options={REST_STYLE_OPTIONS}
+            selectedValue={settings.restStyle}
+            onSelect={(val) => updateSetting('restStyle', val as RestStyle)}
+          />
+          <ChipRow
+            label="Visual Intensity"
+            options={VISUAL_INTENSITY_OPTIONS}
+            selectedValue={settings.visualIntensity}
+            onSelect={(val) => updateSetting('visualIntensity', val as any)}
+          />
+          <ToggleRow
+            label="Show return reflection"
+            subLabel="Prompt before beginning next focus"
+            value={settings.showReturnReflection}
+            onValueChange={(val) => updateSetting('showReturnReflection', val)}
+          />
+        </View>
 
-        <ChipRow
-          label="Work Duration"
-          options={WORK_DURATION_OPTIONS}
-          selectedValue={settings.workDuration}
-          onSelect={(val) => updateSetting('workDuration', val as number)}
-        />
-        <ChipRow
-          label="Short Rest"
-          options={SHORT_REST_OPTIONS}
-          selectedValue={settings.shortRestDuration}
-          onSelect={(val) => updateSetting('shortRestDuration', val as number)}
-        />
-        <ChipRow
-          label="Long Rest"
-          options={LONG_REST_OPTIONS}
-          selectedValue={settings.longRestDuration}
-          onSelect={(val) => updateSetting('longRestDuration', val as number)}
-        />
-        <ChipRow
-          label="Sessions Until Long Rest"
-          options={SESSIONS_UNTIL_LONG_OPTIONS}
-          selectedValue={settings.sessionsUntilLongRest}
-          onSelect={(val) => updateSetting('sessionsUntilLongRest', val as number)}
-        />
+        {/* ── Section 3: Sound & touch ── */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.zoneLabel, { color: theme.colors.textPrimary }]}>Sound & Touch</Text>
+          <ToggleRow
+            label="Sound enabled"
+            subLabel="Master toggle for all sounds"
+            value={settings.soundEnabled}
+            onValueChange={(val) => updateSetting('soundEnabled', val)}
+          />
+          <ToggleRow
+            label="Bells enabled"
+            subLabel="Chime at start and end of sessions"
+            value={settings.bellsEnabled}
+            onValueChange={(val) => updateSetting('bellsEnabled', val)}
+            disabled={!settings.soundEnabled}
+          />
+          <ToggleRow
+            label="Ambient enabled"
+            subLabel="Background sounds during sessions"
+            value={settings.ambientEnabled}
+            onValueChange={(val) => updateSetting('ambientEnabled', val)}
+            disabled={!settings.soundEnabled}
+          />
+          <ChipRow
+            label="Ambient Sound"
+            options={AMBIENT_SOUND_OPTIONS}
+            selectedValue={settings.ambientSound}
+            onSelect={(val) => updateSetting('ambientSound', val as AmbientSound)}
+            disabled={!settings.soundEnabled || !settings.ambientEnabled}
+          />
+          <ChipRow
+            label="Bell Volume"
+            options={BELL_VOLUME_OPTIONS}
+            selectedValue={settings.bellVolume}
+            onSelect={(val) => updateSetting('bellVolume', val as BellVolume)}
+            disabled={!settings.soundEnabled || !settings.bellsEnabled}
+          />
+          <ToggleRow
+            label="Haptics enabled"
+            subLabel="Gentle physical feedback"
+            value={settings.hapticsEnabled}
+            onValueChange={(val) => updateSetting('hapticsEnabled', val)}
+          />
+        </View>
 
-        {/* ── Zone 3: Experience ── */}
-        <Text style={[styles.zoneLabel, styles.zoneGap, { color: theme.colors.textMuted }]}>Experience</Text>
+        {/* ── Section 4: Appearance ── */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.zoneLabel, { color: theme.colors.textPrimary }]}>Appearance</Text>
+          <ChipRow
+            label="Theme Mode"
+            options={THEME_MODE_OPTIONS}
+            selectedValue={settings.themeMode}
+            onSelect={(val) => updateSetting('themeMode', val as ThemeMode)}
+          />
+          <ToggleRow
+            label="Reduced motion"
+            subLabel="Simplify or slow animations"
+            value={settings.reducedMotion}
+            onValueChange={(val) => updateSetting('reducedMotion', val)}
+          />
+          <ToggleRow
+            label="Particles enabled"
+            subLabel="Show floating particles in backgrounds"
+            value={settings.particlesEnabled}
+            onValueChange={(val) => updateSetting('particlesEnabled', val)}
+            disabled={settings.reducedMotion}
+          />
+          <ToggleRow
+            label="Full-screen immersive"
+            subLabel="Hide status bar where possible"
+            value={settings.fullScreenMode}
+            onValueChange={(val) => updateSetting('fullScreenMode', val)}
+          />
+        </View>
 
-        <View style={styles.toggleSection}>
+        {/* ── Section 5: Flow ── */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.zoneLabel, { color: theme.colors.textPrimary }]}>Flow</Text>
           <ToggleRow
             label="Auto-start rest"
-            subLabel="Transitions to rest without confirmation"
+            subLabel="Begin rest immediately when focus ends"
             value={settings.autoStartRest}
             onValueChange={(val) => updateSetting('autoStartRest', val)}
           />
           <ToggleRow
             label="Auto-start work"
-            subLabel="Transitions back to work automatically"
+            subLabel="Begin focus immediately when rest ends"
             value={settings.autoStartWork}
             onValueChange={(val) => updateSetting('autoStartWork', val)}
           />
           <ToggleRow
-            label="Intention word"
-            subLabel="Choose a word to anchor your session"
-            value={settings.intentionWordEnabled}
-            onValueChange={(val) => updateSetting('intentionWordEnabled', val)}
-          />
-          <ToggleRow
-            label="Settle notice"
-            subLabel="Brief moment before rest begins"
-            value={settings.settleNoticeEnabled}
-            onValueChange={(val) => updateSetting('settleNoticeEnabled', val)}
-          />
-          <ToggleRow
-            label="Evening note"
-            subLabel="Gentle end-of-day reflection prompt"
-            value={settings.eveningNoteEnabled}
-            onValueChange={handleEveningNoteToggle}
+            label="Keep screen awake"
+            subLabel="Prevent screen from dimming"
+            value={settings.keepScreenAwake}
+            onValueChange={(val) => updateSetting('keepScreenAwake', val)}
           />
         </View>
 
-        {/* Evening time picker — animates in when Evening Note is ON */}
-        <Animated.View style={eveningPickerStyle}>
-          <ChipRow
-            label="Evening Note Time"
-            options={EVENING_TIME_OPTIONS}
-            selectedValue={settings.eveningNoteTime}
-            onSelect={(val) => updateSetting('eveningNoteTime', val as string)}
-          />
-        </Animated.View>
-
-        <ChipRow
-          label="Ambient Sound"
-          options={AMBIENT_SOUND_OPTIONS}
-          selectedValue={settings.ambientSound}
-          onSelect={(val) => updateSetting('ambientSound', val as AmbientSound)}
-        />
-        <ChipRow
-          label="Rest Style"
-          options={REST_STYLE_OPTIONS}
-          selectedValue={settings.restStyle}
-          onSelect={(val) => updateSetting('restStyle', val as RestStyle)}
-        />
+        {/* ── Section 6: Data ── */}
+        <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.zoneLabel, { color: theme.colors.textPrimary }]}>Data</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.resetButton,
+              { backgroundColor: theme.colors.background },
+              pressed && { opacity: 0.8 },
+            ]}
+            onPress={() => setShowResetConfirm(true)}
+          >
+            <Text style={[styles.resetText, { color: theme.colors.danger }]}>
+              Reset Settings
+            </Text>
+          </Pressable>
+        </View>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      <ConfirmSheet
+        visible={showResetConfirm}
+        title="Reset settings?"
+        confirmLabel="Reset"
+        cancelLabel="Cancel"
+        onConfirm={handleResetSettings}
+        onCancel={() => setShowResetConfirm(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -248,32 +314,40 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 36,
+    marginBottom: 24,
   },
   screenTitle: {
-    fontFamily: FONT.thin,
-    fontSize: 26,
-    letterSpacing: 4,
-    marginLeft: 16,
+    fontFamily: FONT.medium,
+    fontSize: 28,
+    letterSpacing: 1,
+  },
+  rhythmSubtitle: {
+    fontFamily: FONT.regular,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  sectionCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'transparent', // Can use theme line color here in line if needed
   },
   zoneLabel: {
-    fontFamily: FONT.light,
-    fontSize: FS.xs,
-    color: COLORS.creamFaint,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 14,
+    fontFamily: FONT.medium,
+    fontSize: 16,
+    letterSpacing: 1,
+    marginBottom: 16,
   },
-  zoneGap: {
-    marginTop: 32,
+  resetButton: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
   },
-  cardsRow: {
-    flexDirection: 'row',
-    marginHorizontal: -4,
-    marginBottom: 20,
-  },
-  toggleSection: {
-    marginBottom: 8,
+  resetText: {
+    fontFamily: FONT.medium,
+    fontSize: 16,
   },
   bottomPadding: {
     height: 40,

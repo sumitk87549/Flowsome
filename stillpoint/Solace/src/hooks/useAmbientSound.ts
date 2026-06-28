@@ -20,7 +20,6 @@ interface UseAmbientSoundReturn {
 
 export function useAmbientSound(): UseAmbientSoundReturn {
   const { settings } = useSettings();
-  const sensoryProfile = settings.sensoryProfile;
   const ambientSound = settings.ambientSound;
   const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -44,8 +43,8 @@ export function useAmbientSound(): UseAmbientSoundReturn {
    * Start ambient sound with a fade-in over fadeInMs.
    */
   function startAmbient(fadeInMs: number = AMBIENT_FADE_IN_MS) {
-    // Respect sensory profile — 'still' and 'screenOnly' suppress ambient audio
-    const shouldPlayAmbient = sensoryProfile === 'full' || sensoryProfile === 'quiet';
+    // Respect new settings
+    const shouldPlayAmbient = settings.soundEnabled && settings.ambientEnabled;
     if (!shouldPlayAmbient) {
       return;
     }

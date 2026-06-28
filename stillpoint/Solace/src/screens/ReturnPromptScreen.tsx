@@ -10,8 +10,8 @@ import Animated, {
   Easing,
   interpolateColor,
 } from 'react-native-reanimated';
-import { Canvas, Circle, RadialGradient, vec } from '@shopify/react-native-skia';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { PeacefulBackground } from '@/components/shared/PeacefulBackground';
 import { RootStackParamList } from '@/types/navigation';
 import { COLORS } from '@/constants/colors';
 import { FONT } from '@/constants/typography';
@@ -41,36 +41,18 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
   const workStartBell = useBell('work_start');
 
   // Animation shared values
-  const bgProgress = useSharedValue(0);     // 0 = forestNight, 1 = neutralDark
-  const orbOpacity = useSharedValue(0);
-  const orbScale = useSharedValue(0.96);
+  const bgOpacity = useSharedValue(0);
   const readyOpacity = useSharedValue(0);
   const readyTranslateY = useSharedValue(8);
   const subOpacity = useSharedValue(0);
   const counterOpacity = useSharedValue(0);
 
   useEffect(() => {
-    // Background transitions from forestNight to neutralDark over RETURN_BG_TRANSITION
-    bgProgress.value = withTiming(1, {
+    // Fade in background
+    bgOpacity.value = withTiming(1, {
       duration: RETURN_BG_TRANSITION,
       easing: Easing.out(Easing.quad),
     });
-
-    // Orb fades in
-    orbOpacity.value = withDelay(RETURN_ORB_DELAY, withTiming(1, { duration: 600 }));
-
-    // Orb breathes
-    orbScale.value = withDelay(
-      RETURN_ORB_DELAY + 600,
-      withRepeat(
-        withSequence(
-          withTiming(1.04, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
-          withTiming(0.96, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      ),
-    );
 
     // "Ready?" fades in + rises
     readyOpacity.value = withDelay(RETURN_READY_DELAY, withTiming(1, {
@@ -95,16 +77,7 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
   }, []);
 
   const bgStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      bgProgress.value,
-      [0, 1],
-      [theme.colors.restBg, theme.colors.background],
-    ),
-  }));
-
-  const orbStyle = useAnimatedStyle(() => ({
-    opacity: orbOpacity.value,
-    transform: [{ scale: orbScale.value }],
+    opacity: bgOpacity.value,
   }));
 
   const readyStyle = useAnimatedStyle(() => ({
@@ -139,31 +112,23 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
   };
 
   return (
-    <Animated.View style={[styles.container, bgStyle]}>
-      {/* Small ambient orb using Skia */}
-      <Animated.View style={[styles.orbContainer, orbStyle]} pointerEvents="none">
-        <Canvas style={{ width: width * 0.5, height: width * 0.5 }}>
-          <Circle
-            cx={width * 0.25}
-            cy={width * 0.25}
-            r={width * 0.18}
-          >
-            <RadialGradient
-              c={vec(width * 0.25, width * 0.25)}
-              r={width * 0.18}
-              colors={[`${theme.colors.accent}33`, `${theme.colors.accent}00`]}
-            />
-          </Circle>
-        </Canvas>
+    <View style={styles.container}>
+      <Animated.View style={[StyleSheet.absoluteFill, bgStyle]} pointerEvents="none">
+        <PeacefulBackground />
       </Animated.View>
 
-      <Animated.Text style={[styles.readyText, readyStyle, { color: theme.colors.text }]}>
-        Ready?
-      </Animated.Text>
+      <Animated.View style={[styles.textContainer, readyStyle]}>
+        <Text style={[styles.readyText, { color: theme.colors.textPrimary }]}>
+          Come back slowly.
+        </Text>
+        <Text style={[styles.helperText, { color: theme.colors.textMuted }]}>
+          What is the next small action?
+        </Text>
+      </Animated.View>
 
       <Animated.View style={[styles.buttonsContainer, subStyle]}>
         <Pressable style={[styles.button, { backgroundColor: theme.colors.surface }]} onPress={handleReadyPress}>
-          <Text style={[styles.buttonText, { color: theme.colors.text }]}>Begin next focus</Text>
+          <Text style={[styles.buttonText, { color: theme.colors.textPrimary }]}>Begin next focus</Text>
         </Pressable>
         <Pressable style={[styles.button, { backgroundColor: theme.colors.surface }]} onPress={handleChangeIntention}>
           <Text style={[styles.buttonText, { color: theme.colors.textMuted }]}>Change intention</Text>
@@ -176,7 +141,7 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
       <Animated.Text style={[styles.counterText, counterStyle, { color: theme.colors.textMuted }]}>
         {`Session ${sessionNumber} of ${totalSessions}`}
       </Animated.Text>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -186,22 +151,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  orbContainer: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '25%',
-  },
-  tapArea: {
-    width: '80%',
-    height: 120,
-    justifyContent: 'center',
+  textContainer: {
     alignItems: 'center',
+    marginBottom: 48,
   },
   readyText: {
-    fontFamily: FONT.thin,
-    fontSize: 48,
-    letterSpacing: 3,
-    marginBottom: 40,
+    fontFamily: FONT.medium,
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  helperText: {
+    fontFamily: FONT.regular,
+    fontSize: 16,
   },
   buttonsContainer: {
     alignItems: 'center',

@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 interface SolaceToggleProps {
   value: boolean;
   onValueChange: (value: boolean) => void;
+  disabled?: boolean;
 }
 
 const TRACK_WIDTH = 48;
@@ -23,7 +24,7 @@ const THUMB_SIZE = 22;
 const THUMB_OFF_X = 3;
 const THUMB_ON_X = 23;
 
-export default function SolaceToggle({ value, onValueChange }: SolaceToggleProps) {
+export default function SolaceToggle({ value, onValueChange, disabled }: SolaceToggleProps) {
   const { fire } = useHaptic();
   const progress = useSharedValue(value ? 1 : 0);
 
@@ -48,6 +49,7 @@ export default function SolaceToggle({ value, onValueChange }: SolaceToggleProps
   }));
 
   function handlePress() {
+    if (disabled) return;
     fire(Haptics.ImpactFeedbackStyle.Light, false);
     onValueChange(!value);
   }

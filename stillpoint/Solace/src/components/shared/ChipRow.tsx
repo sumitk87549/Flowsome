@@ -6,10 +6,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useHaptic } from '@/hooks/useHaptic';
-import { COLORS } from '@/constants/colors';
 import { FONT, FS } from '@/constants/typography';
 import { TIMING } from '@/constants/timing';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '@/design/theme';
 
 interface ChipOption {
   label: string;
@@ -21,41 +21,50 @@ interface ChipRowProps {
   options: ChipOption[];
   selectedValue: string | number;
   onSelect: (value: string | number) => void;
+  disabled?: boolean;
 }
 
 function Chip({
   option,
   isSelected,
   onSelect,
+  disabled,
 }: {
   option: ChipOption;
   isSelected: boolean;
   onSelect: () => void;
+  disabled?: boolean;
 }) {
   const { fire } = useHaptic();
+  const theme = useTheme();
   const progress = useSharedValue(isSelected ? 1 : 0);
 
   React.useEffect(() => {
     progress.value = withTiming(isSelected ? 1 : 0, { duration: TIMING.CHIP_TRANSITION });
   }, [isSelected, progress]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    borderColor: `rgba(212, 149, 106, ${progress.value * 0.6})`,
-    borderWidth: 1,
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    // using surfaceStrong for selected state so it's readable
+    return {
+      borderColor: isSelected ? theme.colors.accent : 'transparent',
+      borderWidth: 1,
+      backgroundColor: isSelected ? theme.colors.surfaceStrong : theme.colors.surface,
+    };
+  });
 
   const textStyle = useAnimatedStyle(() => ({
-    opacity: isSelected ? 1 : 0.4,
-    color: isSelected ? COLORS.amber : COLORS.cream,
+    opacity: isSelected ? 1 : 0.6,
+    color: isSelected ? theme.colors.accent : theme.colors.textPrimary,
   }));
 
   function handlePress() {
+    if (disabled) return;
     fire(Haptics.ImpactFeedbackStyle.Light, false);
     onSelect();
   }
 
   return (
-    <Pressable onPress={handlePress} style={styles.chipPressable}>
+    <Pressable onPress={handlePress} style={[styles.chipPressable, disabled && { opacity: 0.4 }]}>
       <Animated.View style={[styles.chip, animatedStyle]}>
         <Animated.Text style={[styles.chipText, textStyle]}>{option.label}</Animated.Text>
       </Animated.View>
@@ -63,10 +72,11 @@ function Chip({
   );
 }
 
-export default function ChipRow({ label, options, selectedValue, onSelect }: ChipRowProps) {
+export default function ChipRow({ label, options, selectedValue, onSelect, disabled }: ChipRowProps) {
+  const theme = useTheme();
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: theme.colors.textMuted }]}>{label}</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -78,6 +88,7 @@ export default function ChipRow({ label, options, selectedValue, onSelect }: Chi
             option={option}
             isSelected={option.value === selectedValue}
             onSelect={() => onSelect(option.value)}
+            disabled={disabled}
           />
         ))}
       </ScrollView>
@@ -90,12 +101,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   label: {
-    fontFamily: FONT.light,
+    fontFamily: FONT.medium,
     fontSize: FS.sm,
-    color: COLORS.creamFaint,
     marginBottom: 10,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   chipsContainer: {
     paddingRight: 16,
@@ -107,10 +116,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: COLORS.creamGhost,
   },
   chipText: {
-    fontFamily: FONT.light,
+    fontFamily: FONT.medium,
     fontSize: FS.base,
   },
 });

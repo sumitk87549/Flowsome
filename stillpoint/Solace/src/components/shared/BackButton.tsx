@@ -18,7 +18,7 @@ export function BackButton({ onPress, style, label = 'Back' }: BackButtonProps) 
   const { settings } = useSettings();
 
   const handlePress = () => {
-    if (settings.sensoryProfile === 'full' || settings.sensoryProfile === 'still') {
+    if (settings.hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
     if (onPress) {

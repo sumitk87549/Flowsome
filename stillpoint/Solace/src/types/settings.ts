@@ -1,25 +1,45 @@
-export type AmbientSound = 'forest' | 'rain' | 'ocean' | 'desert' | 'mountain';
+export type AmbientSound = 'none' | 'rain' | 'forest' | 'ocean' | 'night' | 'wind';
 
-export type SensoryProfile = 'full' | 'still' | 'quiet' | 'screenOnly';
-
-export type RestStyle = 'auto' | 'eyesAway' | 'listen' | 'breathe' | 'drift' | 'quickSettle' | 'move' | 'senseAndGround' | 'storyMoment';
+export type RestStyle = 'auto' | 'eyesAway' | 'move' | 'senseAndGround' | 'quietListening' | 'storyGarden';
 
 export type ThemeMode = 'system' | 'dawn' | 'night';
 
+export type BellVolume = 'low' | 'medium' | 'high';
+
 export interface SolaceSettings {
   themeMode: ThemeMode;
-  sensoryProfile: SensoryProfile;
-  transitionsOnly: boolean;
-  workDuration: number;          // in minutes: 15 | 20 | 25 | 30 | 45 | 60
-  shortRestDuration: number;     // in minutes: 5 | 10 | 15
-  longRestDuration: number;      // in minutes: 15 | 20 | 30
-  sessionsUntilLongRest: number; // 2 | 3 | 4
+  
+  // Session Rhythm
+  workDuration: number;          
+  shortRestDuration: number;     
+  longRestDuration: number;      
+  sessionsUntilLongRest: number; 
+
+  // Rest Guidance
+  restStyle: RestStyle;
+  visualIntensity: 'minimal' | 'balanced' | 'immersive';
+  showReturnReflection: boolean;
+
+  // Sound & Touch
+  soundEnabled: boolean;
+  bellsEnabled: boolean;
+  ambientEnabled: boolean;
+  ambientSound: AmbientSound;
+  hapticsEnabled: boolean;
+  bellVolume: BellVolume;
+
+  // Appearance
+  reducedMotion: boolean;
+  particlesEnabled: boolean;
+  fullScreenMode: boolean;
+
+  // Flow
   autoStartRest: boolean;
   autoStartWork: boolean;
-  restStyle: RestStyle;
-  ambientSound: AmbientSound;
-  intentionWordEnabled: boolean;
-  settleNoticeEnabled: boolean;
-  eveningNoteEnabled: boolean;
-  eveningNoteTime: string;        // "HH:MM" 24-hour format
+  keepScreenAwake: boolean;
+
+  // Existing properties that might still be used temporarily
+  transitionsOnly?: boolean;
+  intentionWordEnabled?: boolean;
+  settleNoticeEnabled?: boolean;
 }

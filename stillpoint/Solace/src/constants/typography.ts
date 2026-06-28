@@ -2,6 +2,7 @@ export const FONT = {
   thin: 'DMSans-Thin',
   light: 'DMSans-Light',
   regular: 'DMSans-Regular',
+  medium: 'DMSans-Medium',
 } as const;
 
 // Font sizes (sp values)

@@ -1,11 +1,14 @@
 export type RestMode =
   | 'eyesAway'
   | 'listen'
+  | 'quietListening'
   | 'breatheAndDrift'
   | 'quickSettle'
   | 'moveAndSee'
+  | 'move'
   | 'senseAndGround'
   | 'storyMoment'
+  | 'storyGarden'
   | 'memory'
   | 'walk';
 

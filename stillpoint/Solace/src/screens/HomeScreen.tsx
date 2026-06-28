@@ -30,6 +30,15 @@ import * as Haptics from 'expo-haptics';
 import AmbientOrb from '@/components/home/AmbientOrb';
 import SessionDots from '@/components/home/SessionDots';
 import { SessionSetupSheet } from '@/components/home/SessionSetupSheet';
+import { PeacefulBackground } from '@/components/shared/PeacefulBackground';
+import { useSettings } from '@/context/SettingsContext';
+
+const TAGLINES = [
+  'Work deeply. Return softly.',
+  'Rest is part of the work.',
+  'A quiet rhythm for focus.',
+  'Begin with one intention.',
+];
 
 type HomeNavProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -40,6 +49,9 @@ export default function HomeScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const navigatingRef = useRef(false);
   const theme = useTheme();
+  const { settings } = useSettings();
+  
+  const [tagline] = useState(() => TAGLINES[Math.floor(Math.random() * TAGLINES.length)]);
 
   // ── Entry animation shared values ──
   const bgProgress = useSharedValue(0);       // 0 = black, 1 = neutralDark
@@ -113,7 +125,7 @@ export default function HomeScreen() {
     backgroundColor: interpolateColor(
       exitProgress.value,
       [0, 1],
-      [theme.colors.background, theme.colors.workBg]
+      [theme.colors.background, theme.colors.backgroundDeep]
     ),
   }));
 
@@ -197,8 +209,10 @@ export default function HomeScreen() {
       <Animated.View style={[styles.root, bgStyle, exitBgStyle]}>
         <StatusBar hidden />
 
-        {/* AmbientOrb — behind everything */}
-        <AmbientOrb />
+        {/* PeacefulBackground replaces AmbientOrb */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <PeacefulBackground />
+        </View>
 
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.content}>
@@ -209,22 +223,23 @@ export default function HomeScreen() {
               <Pressable
                 style={styles.gearButton}
                 onPress={() => navigation.navigate('Settings')}
-                hitSlop={16}
+                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                accessibilityLabel="Settings"
               >
-                <Text style={[styles.gearIcon, { color: theme.colors.textMuted }]}>⚙</Text>
+                <Text style={[styles.gearIcon, { color: theme.colors.textMuted }]}>Settings</Text>
               </Pressable>
             </View>
 
             {/* Center group */}
             <View style={styles.centerGroup}>
               {/* Wordmark */}
-              <Animated.Text style={[styles.wordmark, wordmarkStyle, { color: theme.colors.text }]}>
+              <Animated.Text style={[styles.wordmark, wordmarkStyle, { color: theme.colors.textPrimary }]}>
                 SOLACE
               </Animated.Text>
 
               {/* Tagline */}
               <Animated.Text style={[styles.tagline, taglineStyle, { color: theme.colors.textMuted }]}>
-                work with intention
+                {tagline}
               </Animated.Text>
 
               {/* Session dots */}
@@ -241,7 +256,7 @@ export default function HomeScreen() {
                   style={[styles.beginPressable, { backgroundColor: theme.colors.surface }]}
                   onPress={handleBeginPress}
                 >
-                  <Text style={[styles.beginText, { color: theme.colors.text }]}>
+                  <Text style={[styles.beginText, { color: theme.colors.textPrimary }]}>
                     Begin a focus session
                   </Text>
                 </Pressable>
@@ -257,9 +272,12 @@ export default function HomeScreen() {
               </Animated.View>
 
               {/* Stat line */}
-              <Animated.Text style={[styles.statText, statStyle, { color: theme.colors.textMuted }]}>
-                {statText}
-              </Animated.Text>
+              <Animated.View style={[styles.statContainer, statStyle]}>
+                <Text style={[styles.statText, { color: theme.colors.textMuted }]}>
+                  {sessionsCompletedToday > 0 ? `${sessionsCompletedToday} session${sessionsCompletedToday === 1 ? '' : 's'} · ${totalMinutesToday} min today\n` : ''}
+                  {settings.workDuration} · {settings.shortRestDuration} · {settings.longRestDuration}
+                </Text>
+              </Animated.View>
             </View>
 
           </View>
@@ -299,9 +317,13 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   gearButton: {
+    height: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
   gearIcon: {
-    fontSize: 20,
+    fontSize: FS.sm,
+    fontFamily: FONT.regular,
   },
   centerGroup: {
     flex: 1,
@@ -350,9 +372,14 @@ const styles = StyleSheet.create({
     fontFamily: FONT.regular,
     fontSize: FS.sm,
   },
+  statContainer: {
+    alignItems: 'center',
+  },
   statText: {
     fontFamily: FONT.light,
     fontSize: FS.xs,
     letterSpacing: TRACKING.tight,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

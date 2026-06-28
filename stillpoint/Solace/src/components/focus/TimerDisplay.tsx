@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, View, StyleSheet } from 'react-native';
-import { COLORS } from '@/constants/colors';
 import { FONT } from '@/constants/typography';
+import { useTheme } from '@/design/theme';
 
 interface TimerDisplayProps {
   minutes: number;
@@ -9,39 +9,43 @@ interface TimerDisplayProps {
 }
 
 export default function TimerDisplay({ minutes, seconds }: TimerDisplayProps) {
+  const theme = useTheme();
+  const isNight = theme.mode === 'night';
+
+  // In Night mode: bright warm white
+  // In Dawn mode: deep dark brown (the textPrimary from DAWN_THEME = #25231F)
+  const digitColor = isNight ? '#F1E9DA' : '#25231F';
+  const colonColor = isNight ? 'rgba(241,233,218,0.55)' : 'rgba(37,35,31,0.45)';
+
   return (
     <View style={styles.container}>
-      <Text style={styles.digits}>{String(minutes).padStart(2, '0')}</Text>
-      <Text style={styles.colon}>:</Text>
-      <Text style={styles.digits}>{String(seconds).padStart(2, '0')}</Text>
+      <Text style={[styles.digits, { color: digitColor }]}>
+        {String(minutes).padStart(2, '0')}
+      </Text>
+      <Text style={[styles.colon, { color: colonColor }]}>:</Text>
+      <Text style={[styles.digits, { color: digitColor }]}>
+        {String(seconds).padStart(2, '0')}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
     flexDirection: 'row',
-    alignItems: 'baseline', // Fixed alignment matching original
+    alignItems: 'baseline',
     justifyContent: 'center',
-    alignSelf: 'center',
-    top: '44%',
-    zIndex: 3,
   },
   digits: {
     fontFamily: FONT.thin,
     fontSize: 88,
     fontVariant: ['tabular-nums'],
-    color: COLORS.warmWhite,
-    opacity: 1.0,
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
   colon: {
     fontFamily: FONT.thin,
     fontSize: 88,
-    color: COLORS.warmWhite,
-    opacity: 0.55,
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,
     textAlignVertical: 'center',

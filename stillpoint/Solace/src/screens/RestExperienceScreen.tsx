@@ -1,11 +1,10 @@
-// src/screens/RestExperienceScreen.tsx
 import React from 'react';
-import { View, Text, StyleSheet, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, BackHandler, Pressable } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { COLORS } from '@/constants/colors';
-import { FONT } from '@/constants/typography';
+import { FONT, FS } from '@/constants/typography';
 import { useSettings } from '@/context/SettingsContext';
+import { useTheme } from '@/design/theme';
 import { useAmbientSound } from '@/hooks/useAmbientSound';
 import { usePanelQueue } from '@/hooks/usePanelQueue';
 import { PanelText } from '@/components/rest/PanelText';
@@ -22,6 +21,7 @@ import type { RootStackParamList } from '@/types/navigation';
 import type { RestMode, Panel } from '@/types/session';
 import { useSession } from '@/context/SessionContext';
 import { ConfirmSheet } from '@/components/shared/ConfirmSheet';
+import { PeacefulBackground } from '@/components/shared/PeacefulBackground';
 
 type RestExperienceRouteProp = RouteProp<RootStackParamList, 'RestExperience'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -31,6 +31,7 @@ export function RestExperienceScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { settings } = useSettings();
   const ambient = useAmbientSound();
+  const theme = useTheme();
   const { currentCycleNumber, totalCycles } = useSession();
 
   const [showSkipConfirm, setShowSkipConfirm] = React.useState(false);
@@ -74,30 +75,37 @@ export function RestExperienceScreen() {
     switch (mode) {
       case 'eyesAway':
         return <EyesAwayMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'quietListening':
       case 'listen':
         return <ListenMode duration={duration} onSessionComplete={handleSessionComplete} />;
-      case 'breatheAndDrift':
-        return <BreatheAndDriftMode duration={duration} onSessionComplete={handleSessionComplete} />;
-      case 'quickSettle':
-        return <QuickSettleMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'move':
       case 'moveAndSee':
         return <MoveAndSeeMode duration={duration} onSessionComplete={handleSessionComplete} />;
       case 'senseAndGround':
         return <SenseAndGroundMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'storyGarden':
       case 'storyMoment':
         return <StoryMomentMode duration={duration} onSessionComplete={handleSessionComplete} />;
-      case 'memory':
-        return <MemoryMode duration={duration} onSessionComplete={handleSessionComplete} />;
-      case 'walk':
-        return <WalkMode duration={duration} onSessionComplete={handleSessionComplete} />;
       default:
         return <RestModeStub modeName="Rest" duration={duration} onComplete={handleSessionComplete} />;
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <PeacefulBackground />
+      </View>
+      
       {renderMode()}
+      
+      <Pressable 
+        style={styles.skipButton} 
+        onPress={() => setShowSkipConfirm(true)}
+        hitSlop={{ top: 20, right: 20, bottom: 20, left: 20 }}
+      >
+        <Text style={[styles.skipButtonText, { color: theme.colors.textMuted }]}>✕</Text>
+      </Pressable>
       <ConfirmSheet
         visible={showSkipConfirm}
         title="Skip this rest?"
@@ -160,7 +168,20 @@ function RestModeStub({ modeName, duration, onComplete }: RestModeStubProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.forestNight,
+  },
+  skipButton: {
+    position: 'absolute',
+    top: 56,
+    right: 24,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skipButtonText: {
+    fontSize: 24,
+    opacity: 0.8,
   },
 });
 
@@ -173,20 +194,20 @@ const stubStyles = StyleSheet.create({
   modeText: {
     fontFamily: FONT.thin,
     fontSize: 32,
-    color: COLORS.restText,
+    color: '#EEE6D8',
     marginBottom: 12,
   },
   subText: {
     fontFamily: FONT.light,
     fontSize: 14,
-    color: COLORS.restText,
+    color: '#EEE6D8',
     opacity: 0.55,
     marginBottom: 40,
   },
   tapText: {
     fontFamily: FONT.light,
     fontSize: 14,
-    color: COLORS.restText,
+    color: '#EEE6D8',
     opacity: 0.4,
     textDecorationLine: 'underline',
     position: 'absolute',

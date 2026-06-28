@@ -7,7 +7,9 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  ListRenderItemInfo,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -18,36 +20,27 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/navigation';
 import { useSession } from '@/context/SessionContext';
-import { COLORS } from '@/constants/colors';
 import { FONT, FS, TRACKING } from '@/constants/typography';
 import { TIMING } from '@/constants/timing';
 import { EASE } from '@/constants/easing';
-import WordTile, {
-  TILE_WIDTH,
-  TILE_HEIGHT,
-  TILE_HORIZONTAL_MARGIN,
-} from '@/components/home/WordTile';
-
 import { BackButton } from '@/components/shared/BackButton';
 import { useTheme } from '@/design/theme';
+import { PeacefulBackground } from '@/components/shared/PeacefulBackground';
 
 type FocusNavProp = NativeStackNavigationProp<RootStackParamList, 'FocusIntention'>;
 
-// Fixed word list — order matters, never change it
 const INTENTION_WORDS = [
   'Write',
   'Code',
   'Design',
-  'Think',
   'Study',
   'Read',
   'Plan',
-  'Create',
   'Review',
   'Build',
+  'Think',
+  'Create',
 ];
-
-const ITEM_TOTAL_WIDTH = TILE_WIDTH + TILE_HORIZONTAL_MARGIN * 2;
 
 export default function FocusIntentionScreen() {
   const navigation = useNavigation<FocusNavProp>();
@@ -55,51 +48,26 @@ export default function FocusIntentionScreen() {
   const theme = useTheme();
 
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [customWord, setCustomWord] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasNavigatedRef = useRef(false);
-  const flatListRef = useRef<FlatList<string>>(null);
 
   // Content fade-in
   const contentOpacity = useSharedValue(0);
 
   useEffect(() => {
-    // Fade in content
     contentOpacity.value = withTiming(1, {
       duration: TIMING.SCREEN_B_FADE_DURATION,
       easing: EASE.outQuad,
     });
-
-    // Auto-advance after 3 seconds
-    autoAdvanceRef.current = setTimeout(() => {
-      navigateToWork(undefined);
-    }, TIMING.FOCUS_AUTO_ADVANCE_MS);
-
-    return () => {
-      if (autoAdvanceRef.current !== null) {
-        clearTimeout(autoAdvanceRef.current);
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Scroll to previously selected word on entry
-  useEffect(() => {
-    if (currentIntentionWord) {
-      const index = INTENTION_WORDS.indexOf(currentIntentionWord);
-      if (index !== -1 && flatListRef.current) {
-        // Small delay to let FlatList render before scrolling
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index, animated: false });
-        }, 100);
-      }
-    }
-  }, [currentIntentionWord]);
 
   function navigateToWork(word: string | undefined) {
     if (hasNavigatedRef.current) return;
     hasNavigatedRef.current = true;
 
-    // Cancel auto-advance if still pending
     if (autoAdvanceRef.current !== null) {
       clearTimeout(autoAdvanceRef.current);
       autoAdvanceRef.current = null;
@@ -108,105 +76,115 @@ export default function FocusIntentionScreen() {
     navigation.navigate('WorkSession', { intentionWord: word });
   }
 
-  const handleTilePress = useCallback(
-    (word: string) => {
-      setSelectedWord(word);
-
-      // Navigate after tile selection animation plays
-      setTimeout(() => {
-        navigateToWork(word);
-      }, TIMING.FOCUS_TILE_NAV_DELAY);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  const handleTilePress = useCallback((word: string) => {
+    setSelectedWord(word);
+    setTimeout(() => {
+      navigateToWork(word);
+    }, 400);
+  }, []);
 
   function handleSkip() {
     navigateToWork(undefined);
+  }
+
+  function handleCustomSubmit() {
+    if (customWord.trim()) {
+      handleTilePress(customWord.trim());
+    }
   }
 
   const contentStyle = useAnimatedStyle(() => ({
     opacity: contentOpacity.value,
   }));
 
-  // FlatList helpers
-  const getItemLayout = useCallback(
-    (_data: ArrayLike<string> | null | undefined, index: number) => ({
-      length: ITEM_TOTAL_WIDTH,
-      offset: ITEM_TOTAL_WIDTH * index,
-      index,
-    }),
-    []
-  );
-
-  // Calculate initialScrollIndex — scroll to previously used word
-  const initialScrollIndex = currentIntentionWord
-    ? Math.max(0, INTENTION_WORDS.indexOf(currentIntentionWord))
-    : 0;
-
-  const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<string>) => (
-      <WordTile
-        word={item}
-        isSelected={selectedWord === item}
-        onPress={() => handleTilePress(item)}
-      />
-    ),
-    [selectedWord, handleTilePress]
-  );
-
-  const keyExtractor = useCallback((item: string) => item, []);
+  // Put previous intention first if it exists
+  const displayWords = currentIntentionWord && !INTENTION_WORDS.includes(currentIntentionWord)
+    ? [currentIntentionWord, ...INTENTION_WORDS]
+    : INTENTION_WORDS;
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoidingView 
+      style={styles.root} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <PeacefulBackground />
+      </View>
       <StatusBar hidden />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <BackButton />
         </View>
+        
         <Animated.View style={[styles.content, contentStyle]}>
-
-          {/* Prompt text — top third */}
           <View style={styles.promptContainer}>
-            <Text style={[styles.promptText, { color: theme.colors.text }]}>What are you here to do?</Text>
+            <Text style={[styles.promptText, { color: theme.colors.textPrimary }]}>
+              What is this session for?
+            </Text>
+            <Text style={[styles.helperText, { color: theme.colors.textMuted }]}>
+              One word is enough.
+            </Text>
           </View>
 
-          {/* Word tiles — horizontal FlatList, middle */}
-          <View style={styles.tilesContainer}>
-            <FlatList
-              ref={flatListRef}
-              data={INTENTION_WORDS}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              getItemLayout={getItemLayout}
-              initialScrollIndex={initialScrollIndex}
-              contentContainerStyle={styles.flatListContent}
-              // Prevent the list from capturing the full-screen swipe gesture
-              keyboardShouldPersistTaps="handled"
-              onScrollToIndexFailed={(info) => {
-                // Retry after layout
-                setTimeout(() => {
-                  flatListRef.current?.scrollToIndex({
-                    index: info.index,
-                    animated: false,
-                  });
-                }, 200);
-              }}
-            />
+          <View style={styles.stackContainer}>
+            {isTyping ? (
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.textMuted }]}
+                  placeholder="Write my own..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={customWord}
+                  onChangeText={setCustomWord}
+                  onSubmitEditing={handleCustomSubmit}
+                  autoFocus
+                  returnKeyType="done"
+                />
+                <Pressable onPress={() => setIsTyping(false)} style={styles.cancelButton}>
+                  <Text style={[styles.cancelText, { color: theme.colors.textMuted }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.chipsGrid}>
+                {displayWords.map(word => {
+                  const isSelected = selectedWord === word;
+                  return (
+                    <Pressable
+                      key={word}
+                      onPress={() => handleTilePress(word)}
+                      style={[
+                        styles.chip,
+                        { 
+                          backgroundColor: isSelected ? theme.colors.accent : theme.colors.surface,
+                          borderColor: isSelected ? theme.colors.accent : theme.colors.line 
+                        }
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: isSelected ? theme.colors.background : theme.colors.textPrimary }]}>
+                        {word}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  onPress={() => setIsTyping(true)}
+                  style={[styles.chip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.line }]}
+                >
+                  <Text style={[styles.chipText, { color: theme.colors.textPrimary }]}>
+                    Write my own...
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           </View>
 
-          {/* Skip — bottom */}
           <View style={styles.skipContainer}>
             <Pressable onPress={handleSkip} hitSlop={16}>
-              <Text style={[styles.skipText, { color: theme.colors.textMuted }]}>skip</Text>
+              <Text style={[styles.skipText, { color: theme.colors.textMuted }]}>Skip for now</Text>
             </Pressable>
           </View>
-
         </Animated.View>
       </SafeAreaView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -223,37 +201,72 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 48,
+    paddingHorizontal: 24,
+    paddingBottom: 48,
   },
   promptContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    marginTop: 40,
+    marginBottom: 40,
   },
   promptText: {
-    fontFamily: FONT.light,
-    fontSize: FS.display,
+    fontFamily: FONT.medium,
+    fontSize: 28,
     textAlign: 'center',
-    lineHeight: 30,
+    marginBottom: 12,
   },
-  tilesContainer: {
-    width: '100%',
-    height: TILE_HEIGHT + 16,
+  helperText: {
+    fontFamily: FONT.regular,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  stackContainer: {
+    flex: 1,
     justifyContent: 'center',
   },
-  flatListContent: {
+  chipsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  chip: {
     paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontFamily: FONT.medium,
+    fontSize: FS.base,
+  },
+  inputContainer: {
     alignItems: 'center',
+    width: '100%',
+  },
+  input: {
+    width: '80%',
+    height: 56,
+    borderBottomWidth: 1,
+    fontFamily: FONT.medium,
+    fontSize: 24,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  cancelButton: {
+    padding: 12,
+  },
+  cancelText: {
+    fontFamily: FONT.regular,
+    fontSize: 16,
   },
   skipContainer: {
     alignItems: 'center',
     paddingBottom: 8,
   },
   skipText: {
-    fontFamily: FONT.light,
+    fontFamily: FONT.regular,
     fontSize: FS.md,
     letterSpacing: TRACKING.wide,
   },

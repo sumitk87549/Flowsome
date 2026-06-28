@@ -1,24 +1,27 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import SolaceToggle from '@/components/shared/SolaceToggle';
-import { COLORS } from '@/constants/colors';
 import { FONT, FS } from '@/constants/typography';
+import { useTheme } from '@/design/theme';
 
 interface ToggleRowProps {
   label: string;
   subLabel?: string;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  disabled?: boolean;
 }
 
-export default function ToggleRow({ label, subLabel, value, onValueChange }: ToggleRowProps) {
+export default function ToggleRow({ label, subLabel, value, onValueChange, disabled }: ToggleRowProps) {
+  const theme = useTheme();
+  
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, disabled && { opacity: 0.4 }]}>
       <View style={styles.labelContainer}>
-        <Text style={styles.label}>{label}</Text>
-        {subLabel ? <Text style={styles.subLabel}>{subLabel}</Text> : null}
+        <Text style={[styles.label, { color: theme.colors.textPrimary }]}>{label}</Text>
+        {subLabel ? <Text style={[styles.subLabel, { color: theme.colors.textMuted }]}>{subLabel}</Text> : null}
       </View>
-      <SolaceToggle value={value} onValueChange={onValueChange} />
+      <SolaceToggle value={value} onValueChange={onValueChange} disabled={disabled} />
     </View>
   );
 }
@@ -35,14 +38,12 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   label: {
-    fontFamily: FONT.light,
+    fontFamily: FONT.medium,
     fontSize: FS.body,
-    color: COLORS.cream,
   },
   subLabel: {
-    fontFamily: FONT.light,
+    fontFamily: FONT.regular,
     fontSize: FS.sm,
-    color: COLORS.creamFaint,
     marginTop: 2,
   },
 });

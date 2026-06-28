@@ -10,7 +10,7 @@ export function ThemeToggle() {
   const theme = useTheme();
 
   const handlePress = () => {
-    if (settings.sensoryProfile === 'full' || settings.sensoryProfile === 'still') {
+    if (settings.hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
     const nextMode = settings.themeMode === 'dawn' ? 'night' : 'dawn';
