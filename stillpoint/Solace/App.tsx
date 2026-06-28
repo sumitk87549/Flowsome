@@ -5,6 +5,7 @@ import { useFonts } from 'expo-font';
 import { SettingsProvider } from '@/context/SettingsContext';
 import { SessionProvider } from '@/context/SessionContext';
 import RootNavigator from '@/navigation/RootNavigator';
+import { ThemeProvider } from '@/design/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -40,7 +41,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SettingsProvider onLoaded={() => setSettingsReady(true)}>
         <SessionProvider onLoaded={() => setSessionReady(true)}>
-          {appReady ? <RootNavigator /> : null}
+          <ThemeProvider>
+            {appReady ? <RootNavigator /> : null}
+          </ThemeProvider>
         </SessionProvider>
       </SettingsProvider>
     </GestureHandlerRootView>

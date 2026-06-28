@@ -7,9 +7,6 @@ import { COLORS } from '@/constants/colors';
 import HomeScreen from '@/screens/HomeScreen';
 import FocusIntentionScreen from '@/screens/FocusIntentionScreen';
 import WorkSessionScreen from '@/screens/WorkSessionScreen';
-import WorkRestTransitionScreen from '@/screens/WorkRestTransitionScreen';
-import RestSessionScreen from '@/screens/RestSessionScreen';
-import CycleCompleteScreen from '@/screens/CycleCompleteScreen';
 import ReturnPromptScreen from '@/screens/ReturnPromptScreen';
 import LongBreakScreen from '@/screens/LongBreakScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
@@ -17,9 +14,13 @@ import { TransitionScreen } from '@/screens/TransitionScreen';
 import { RestExperienceScreen } from '@/screens/RestExperienceScreen';
 import SettleNoticeScreen from '@/screens/SettleNoticeScreen';
 
+import { useTheme } from '@/design/theme';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
+  const theme = useTheme();
+
   return (
     <NavigationContainer>
       <Stack.Navigator
@@ -28,7 +29,7 @@ export default function RootNavigator() {
           animation: 'none',
           headerShown: false,
           gestureEnabled: false,
-          contentStyle: { backgroundColor: COLORS.neutralDark },
+          contentStyle: { backgroundColor: theme.colors.background },
         }}
       >
         <Stack.Screen
@@ -38,9 +39,7 @@ export default function RootNavigator() {
         />
         <Stack.Screen name="FocusIntention" component={FocusIntentionScreen} />
         <Stack.Screen name="WorkSession" component={WorkSessionScreen} />
-        <Stack.Screen name="WorkRestTransition" component={WorkRestTransitionScreen} />
-        <Stack.Screen name="RestSession" component={RestSessionScreen} />
-        <Stack.Screen name="CycleComplete" component={CycleCompleteScreen} />
+
         <Stack.Screen 
           name="Transition" 
           component={TransitionScreen} 

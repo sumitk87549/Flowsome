@@ -1,6 +1,6 @@
 // src/screens/TransitionScreen.tsx
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, BackHandler } from 'react-native';
+import { StyleSheet, BackHandler, Pressable, Text } from 'react-native';
 import Animated, {
   useSharedValue,
   withTiming,
@@ -35,6 +35,7 @@ import type { RestMode } from '@/types/session';
 
 // Human-readable display names for each rest mode
 const REST_MODE_DISPLAY_NAMES: Record<RestMode, string> = {
+  eyesAway:       'Eyes Away',
   listen:         'Listen',
   breatheAndDrift:'Breathe & Drift',
   quickSettle:    'Quick Settle',
@@ -69,12 +70,14 @@ export function TransitionScreen() {
   // Background color progress: 0 = work-end blue (#1F2337), 1 = forest night (#141E1A)
   const bgProgress = useSharedValue(0);
 
-  // "Rest" label
   const restLabelOpacity = useSharedValue(0);
   const restLabelTranslateY = useSharedValue(8);
 
   // Mode name label
   const modeLabelOpacity = useSharedValue(0);
+
+  // Buttons for non-auto
+  const buttonsOpacity = useSharedValue(0);
 
   // ----- Animated styles -----
 
@@ -93,6 +96,10 @@ export function TransitionScreen() {
 
   const modeLabelStyle = useAnimatedStyle(() => ({
     opacity: modeLabelOpacity.value,
+  }));
+
+  const buttonsStyle = useAnimatedStyle(() => ({
+    opacity: buttonsOpacity.value,
   }));
 
   // ----- Main sequence -----
@@ -144,15 +151,23 @@ export function TransitionScreen() {
         duration: TRANSITION_MODE_LABEL_IN,
         easing: Easing.out(Easing.quad),
       });
+      if (!settings.autoStartRest) {
+        buttonsOpacity.value = withTiming(1, {
+          duration: TRANSITION_MODE_LABEL_IN,
+          easing: Easing.out(Easing.quad),
+        });
+      }
     }, TRANSITION_MODE_LABEL_DELAY);
 
-    // T = 5200ms — Navigate to RestExperience
-    schedule(() => {
-      navigation.navigate('RestExperience', {
-        mode: nextRestModeRef.current,
-        duration: settings.shortRestDuration,
-      });
-    }, TRANSITION_NAVIGATE_DELAY);
+    // T = 5200ms — Navigate to RestExperience (if autoStartRest is true)
+    if (settings.autoStartRest) {
+      schedule(() => {
+        navigation.navigate('RestExperience', {
+          mode: nextRestModeRef.current,
+          duration: settings.shortRestDuration,
+        });
+      }, TRANSITION_NAVIGATE_DELAY);
+    }
 
     // Cleanup: cancel all pending timeouts if screen unmounts early
     return () => {
@@ -174,6 +189,35 @@ export function TransitionScreen() {
       <Animated.Text style={[styles.modeLabel, modeLabelStyle]}>
         {modeDisplayName}
       </Animated.Text>
+
+      {!settings.autoStartRest && (
+        <Animated.View style={[styles.buttonsContainer, buttonsStyle]}>
+          <Pressable 
+            style={styles.primaryButton}
+            onPress={() => {
+              navigation.navigate('RestExperience', {
+                mode: nextRestModeRef.current,
+                duration: settings.shortRestDuration,
+              });
+            }}
+          >
+            <Text style={styles.primaryButtonText}>Begin Rest</Text>
+          </Pressable>
+          
+          <Pressable 
+            style={styles.secondaryButton}
+            onPress={() => {
+              // skip rest => return prompt
+              navigation.navigate('ReturnPrompt', {
+                sessionNumber: session.currentCycleNumber,
+                totalSessions: session.totalCycles,
+              });
+            }}
+          >
+            <Text style={styles.secondaryButtonText}>Skip Rest</Text>
+          </Pressable>
+        </Animated.View>
+      )}
     </Animated.View>
   );
 }
@@ -198,4 +242,33 @@ const styles = StyleSheet.create({
     letterSpacing: TRACKING.base,
     opacity: 0.55,
   },
+  buttonsContainer: {
+    marginTop: 64,
+    width: '100%',
+    paddingHorizontal: 40,
+    gap: 16,
+  },
+  primaryButton: {
+    paddingVertical: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontFamily: FONT.regular,
+    fontSize: FS.base,
+    color: COLORS.cream,
+    letterSpacing: 0.5,
+  },
+  secondaryButton: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontFamily: FONT.regular,
+    fontSize: FS.base,
+    color: COLORS.cream,
+    opacity: 0.6,
+    letterSpacing: 0.5,
+  }
 });

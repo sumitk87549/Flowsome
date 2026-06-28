@@ -4,9 +4,7 @@ export type RootStackParamList = {
   Home: undefined;
   FocusIntention: undefined;
   WorkSession: { intentionWord: string | undefined };
-  WorkRestTransition: undefined;
-  RestSession: { restMode: string };
-  CycleComplete: undefined;
+
   ReturnPrompt: { sessionNumber: number; totalSessions: number };
   LongBreak: undefined;
   Settings: undefined;

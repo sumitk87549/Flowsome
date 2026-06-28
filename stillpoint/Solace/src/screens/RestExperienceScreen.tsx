@@ -9,6 +9,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useAmbientSound } from '@/hooks/useAmbientSound';
 import { usePanelQueue } from '@/hooks/usePanelQueue';
 import { PanelText } from '@/components/rest/PanelText';
+import EyesAwayMode from '@/rest-modes/EyesAwayMode';
 import { ListenMode } from '@/rest-modes/ListenMode';
 import { BreatheAndDriftMode } from '@/rest-modes/BreatheAndDriftMode';
 import { QuickSettleMode } from '@/rest-modes/QuickSettleMode';
@@ -20,6 +21,7 @@ import WalkMode from '@/rest-modes/WalkMode';
 import type { RootStackParamList } from '@/types/navigation';
 import type { RestMode, Panel } from '@/types/session';
 import { useSession } from '@/context/SessionContext';
+import { ConfirmSheet } from '@/components/shared/ConfirmSheet';
 
 type RestExperienceRouteProp = RouteProp<RootStackParamList, 'RestExperience'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -31,8 +33,11 @@ export function RestExperienceScreen() {
   const ambient = useAmbientSound();
   const { currentCycleNumber, totalCycles } = useSession();
 
+  const [showSkipConfirm, setShowSkipConfirm] = React.useState(false);
+
   React.useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      setShowSkipConfirm(true);
       return true;
     });
     return () => backHandler.remove();
@@ -58,10 +63,17 @@ export function RestExperienceScreen() {
       }
     });
   }, [navigation, ambient, settings, currentCycleNumber, totalCycles]);
+
+  const handleSkipConfirm = () => {
+    setShowSkipConfirm(false);
+    handleSessionComplete();
+  };
   // Route to the correct rest mode component based on mode param
   // Sprint 8 replaces the stub content inside each case with real mode components
   const renderMode = () => {
     switch (mode) {
+      case 'eyesAway':
+        return <EyesAwayMode duration={duration} onSessionComplete={handleSessionComplete} />;
       case 'listen':
         return <ListenMode duration={duration} onSessionComplete={handleSessionComplete} />;
       case 'breatheAndDrift':
@@ -86,6 +98,14 @@ export function RestExperienceScreen() {
   return (
     <View style={styles.container}>
       {renderMode()}
+      <ConfirmSheet
+        visible={showSkipConfirm}
+        title="Skip this rest?"
+        confirmLabel="Skip Rest"
+        cancelLabel="Stay"
+        onConfirm={handleSkipConfirm}
+        onCancel={() => setShowSkipConfirm(false)}
+      />
     </View>
   );
 }

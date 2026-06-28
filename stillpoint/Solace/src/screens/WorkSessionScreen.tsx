@@ -11,6 +11,8 @@ import { WorkSessionCanvas } from '@/components/focus/WorkSessionCanvas';
 import { useWorkSessionBackground } from '@/hooks/useWorkSessionBackground';
 import TimerDisplay from '@/components/focus/TimerDisplay';
 import { useBell } from '@/utils/bellPlayer';
+import { ConfirmSheet } from '@/components/shared/ConfirmSheet';
+import { useTheme } from '@/design/theme';
 
 import { useSessionTimer } from '@/hooks/useSessionTimer';
 import { useSettings } from '@/context/SettingsContext';
@@ -41,6 +43,8 @@ export default function WorkSessionScreen() {
   // Pause state — use useState here because the UI needs to react to it
   const [isPaused, setIsPaused] = useState(false);
   const [isSessionEnding, setIsSessionEnding] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const theme = useTheme();
 
   // Pause overlay opacity — use React Native's Animated.Value
   const pauseOverlayOpacity = useRef(new Animated.Value(0)).current;
@@ -69,8 +73,9 @@ export default function WorkSessionScreen() {
   const backgroundAnimatedStyle = useWorkSessionBackground(sessionDurationMs, sessionStartMs);
 
   useEffect(() => {
-    // 0. Disable back button
+    // 0. Back button shows confirm
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      setShowEndConfirm(true);
       return true;
     });
 
@@ -125,6 +130,12 @@ export default function WorkSessionScreen() {
     }
   };
 
+  const handleEndSession = () => {
+    setShowEndConfirm(false);
+    timer.pause(); // stop the timer
+    navigation.navigate('Home');
+  };
+
   return (
     <View style={styles.container}>
       {/* Hide status bar */}
@@ -174,7 +185,19 @@ export default function WorkSessionScreen() {
         <Pressable onPress={handlePausePress} style={styles.resumeButton}>
           <Text style={styles.resumeButtonText}>Resume</Text>
         </Pressable>
+        <Pressable onPress={() => setShowEndConfirm(true)} style={[styles.resumeButton, { marginTop: 20, borderColor: 'transparent' }]}>
+          <Text style={[styles.resumeButtonText, { color: theme.colors.textMuted }]}>End Session</Text>
+        </Pressable>
       </Animated.View>
+
+      <ConfirmSheet
+        visible={showEndConfirm}
+        title="End this focus session?"
+        confirmLabel="End Session"
+        cancelLabel="Cancel"
+        onConfirm={handleEndSession}
+        onCancel={() => setShowEndConfirm(false)}
+      />
     </View>
   );
 }

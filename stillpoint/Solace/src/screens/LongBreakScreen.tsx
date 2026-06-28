@@ -14,9 +14,11 @@ import { RestMode } from '@/types/session';
 import { COLORS } from '@/constants/colors';
 import { FONT } from '@/constants/typography';
 import { useHaptic } from '@/hooks/useHaptic';
-import { useSettings } from '@/context/SettingsContext';
 import { useBell } from '@/utils/bellPlayer';
 import * as Haptics from 'expo-haptics';
+import { BackButton } from '@/components/shared/BackButton';
+import { useTheme } from '@/design/theme';
+import { useSettings } from '@/context/SettingsContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LongBreak'>;
 
@@ -60,16 +62,17 @@ function LongBreakTile({ option, scaleValue, onPress, onPressIn, onPressOut }: L
     transform: [{ scale: scaleValue.value }],
   }));
 
+  const theme = useTheme();
   return (
     <Animated.View style={tileStyle}>
       <Pressable
-        style={styles.tile}
+        style={[styles.tile, { borderColor: theme.colors.line, backgroundColor: theme.colors.surface }]}
         onPress={onPress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
       >
-        <Text style={styles.tileLabel}>{option.label}</Text>
-        <Text style={styles.tileDescriptor}>{option.descriptor}</Text>
+        <Text style={[styles.tileLabel, { color: theme.colors.text }]}>{option.label}</Text>
+        <Text style={[styles.tileDescriptor, { color: theme.colors.textMuted }]}>{option.descriptor}</Text>
       </Pressable>
     </Animated.View>
   );
@@ -78,6 +81,7 @@ function LongBreakTile({ option, scaleValue, onPress, onPressIn, onPressOut }: L
 export default function LongBreakScreen({ navigation }: Props) {
   const { settings } = useSettings();
   const { fire: hapticFire } = useHaptic();
+  const theme = useTheme();
 
   const longBreakBell = useBell('long_break');
 
@@ -127,8 +131,9 @@ export default function LongBreakScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      <Animated.Text style={[styles.headline, headlineStyle]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <BackButton style={styles.backButton} />
+      <Animated.Text style={[styles.headline, headlineStyle, { color: theme.colors.text }]}>
         You've earned a longer rest.
       </Animated.Text>
 
@@ -151,14 +156,16 @@ export default function LongBreakScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.neutralDark,
-    paddingTop: 80,
+    paddingTop: 60,
     paddingHorizontal: 24,
+  },
+  backButton: {
+    marginBottom: 40,
+    marginLeft: -8,
   },
   headline: {
     fontFamily: FONT.light,
     fontSize: 32,
-    color: COLORS.cream,
     marginBottom: 48,
     lineHeight: 42,
   },
@@ -171,20 +178,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: `${COLORS.cream}1F`,   // cream at ~12% opacity
-    backgroundColor: `${COLORS.cream}0A`, // cream at ~4% opacity
   },
   tileLabel: {
     fontFamily: FONT.light,
     fontSize: 18,
-    color: COLORS.cream,
     marginBottom: 4,
   },
   tileDescriptor: {
     fontFamily: FONT.light,
     fontSize: 12,
-    color: COLORS.cream,
-    opacity: 0.5,
     letterSpacing: 0.3,
   },
 });

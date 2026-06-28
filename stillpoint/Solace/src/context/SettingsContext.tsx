@@ -3,6 +3,7 @@ import { SolaceSettings } from '@/types/settings';
 import { readJson, writeJson, STORAGE_KEYS } from '@/utils/storage';
 
 const DEFAULT_SETTINGS: SolaceSettings = {
+  themeMode: 'system',
   sensoryProfile: 'full',
   transitionsOnly: false,
   workDuration: 25,

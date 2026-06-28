@@ -20,7 +20,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/navigation';
 import { useSession } from '@/context/SessionContext';
 import { useHaptic } from '@/hooks/useHaptic';
-import { COLORS } from '@/constants/colors';
+import { useTheme } from '@/design/theme';
+import { ThemeToggle } from '@/components/home/ThemeToggle';
 import { FONT, FS, TRACKING } from '@/constants/typography';
 import { TIMING } from '@/constants/timing';
 import { EASE } from '@/constants/easing';
@@ -28,7 +29,7 @@ import { LAYOUT } from '@/constants/layout';
 import * as Haptics from 'expo-haptics';
 import AmbientOrb from '@/components/home/AmbientOrb';
 import SessionDots from '@/components/home/SessionDots';
-import SessionSummarySheet from '@/components/home/SessionSummarySheet';
+import { SessionSetupSheet } from '@/components/home/SessionSetupSheet';
 
 type HomeNavProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -38,6 +39,7 @@ export default function HomeScreen() {
   const { fire } = useHaptic();
   const [sheetOpen, setSheetOpen] = useState(false);
   const navigatingRef = useRef(false);
+  const theme = useTheme();
 
   // ── Entry animation shared values ──
   const bgProgress = useSharedValue(0);       // 0 = black, 1 = neutralDark
@@ -98,21 +100,20 @@ export default function HomeScreen() {
     statOpacity,
   ]);
 
-  // ── Animated styles ──
   const bgStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
       bgProgress.value,
       [0, 1],
-      [COLORS.restSlate, COLORS.neutralDark]
+      [theme.colors.surface, theme.colors.background]
     ),
   }));
 
-  // Exit: neutralDark → workBlue driven by exitProgress
+  // Exit: background → workBg driven by exitProgress
   const exitBgStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
       exitProgress.value,
       [0, 1],
-      [COLORS.neutralDark, COLORS.workBlue]
+      [theme.colors.background, theme.colors.workBg]
     ),
   }));
 
@@ -202,24 +203,27 @@ export default function HomeScreen() {
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.content}>
 
-            {/* Gear icon — navigate to Settings */}
-            <Pressable
-              style={styles.gearButton}
-              onPress={() => navigation.navigate('Settings')}
-              hitSlop={16}
-            >
-              <Text style={styles.gearIcon}>⚙</Text>
-            </Pressable>
+            {/* Top Bar */}
+            <View style={styles.topBar}>
+              <ThemeToggle />
+              <Pressable
+                style={styles.gearButton}
+                onPress={() => navigation.navigate('Settings')}
+                hitSlop={16}
+              >
+                <Text style={[styles.gearIcon, { color: theme.colors.textMuted }]}>⚙</Text>
+              </Pressable>
+            </View>
 
             {/* Center group */}
             <View style={styles.centerGroup}>
               {/* Wordmark */}
-              <Animated.Text style={[styles.wordmark, wordmarkStyle]}>
+              <Animated.Text style={[styles.wordmark, wordmarkStyle, { color: theme.colors.text }]}>
                 SOLACE
               </Animated.Text>
 
               {/* Tagline */}
-              <Animated.Text style={[styles.tagline, taglineStyle]}>
+              <Animated.Text style={[styles.tagline, taglineStyle, { color: theme.colors.textMuted }]}>
                 work with intention
               </Animated.Text>
 
@@ -231,18 +235,29 @@ export default function HomeScreen() {
                 />
               </View>
 
-              {/* Begin pressable */}
-              <Pressable
-                style={styles.beginPressable}
-                onPress={handleBeginPress}
-              >
-                <Animated.Text style={[styles.beginText, beginStyle]}>
-                  Begin
-                </Animated.Text>
-              </Pressable>
+              {/* Actions */}
+              <Animated.View style={[styles.actionsContainer, beginStyle]}>
+                <Pressable
+                  style={[styles.beginPressable, { backgroundColor: theme.colors.surface }]}
+                  onPress={handleBeginPress}
+                >
+                  <Text style={[styles.beginText, { color: theme.colors.text }]}>
+                    Begin a focus session
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.adjustPressable}
+                  onPress={() => setSheetOpen(true)}
+                >
+                  <Text style={[styles.adjustText, { color: theme.colors.textMuted }]}>
+                    Adjust session
+                  </Text>
+                </Pressable>
+              </Animated.View>
 
               {/* Stat line */}
-              <Animated.Text style={[styles.statText, statStyle]}>
+              <Animated.Text style={[styles.statText, statStyle, { color: theme.colors.textMuted }]}>
                 {statText}
               </Animated.Text>
             </View>
@@ -250,10 +265,10 @@ export default function HomeScreen() {
           </View>
         </SafeAreaView>
 
-        {/* Session Summary Sheet */}
+        {/* Session Setup Sheet */}
         <GestureDetector gesture={swipeDownGesture}>
           <View style={StyleSheet.absoluteFill} pointerEvents={sheetOpen ? 'box-none' : 'none'}>
-            <SessionSummarySheet
+            <SessionSetupSheet
               isOpen={sheetOpen}
               onClose={() => setSheetOpen(false)}
             />
@@ -276,16 +291,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  gearButton: {
-    position: 'absolute',
-    top: 16,
-    right: 20,
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
     zIndex: 10,
   },
+  gearButton: {
+  },
   gearIcon: {
-    fontSize: 18,
-    color: COLORS.creamFaint,
-    opacity: 0.5,
+    fontSize: 20,
   },
   centerGroup: {
     flex: 1,
@@ -295,14 +311,12 @@ const styles = StyleSheet.create({
   wordmark: {
     fontFamily: FONT.thin,
     fontSize: FS.wordmark,
-    color: COLORS.cream,
     letterSpacing: TRACKING.widest,
     marginBottom: 10,
   },
   tagline: {
     fontFamily: FONT.light,
     fontSize: FS.sm,
-    color: COLORS.creamFaint,
     letterSpacing: TRACKING.base,
     marginBottom: 40,
   },
@@ -311,23 +325,34 @@ const styles = StyleSheet.create({
     height: 16,
     justifyContent: 'center',
   },
+  actionsContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   beginPressable: {
-    width: LAYOUT.screenWidth,
-    height: 60,
+    width: '100%',
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   beginText: {
-    fontFamily: FONT.light,
-    fontSize: FS.body,
-    color: COLORS.cream,
-    letterSpacing: TRACKING.wider,
+    fontFamily: FONT.regular,
+    fontSize: FS.base,
+    letterSpacing: TRACKING.base,
+  },
+  adjustPressable: {
+    padding: 8,
+  },
+  adjustText: {
+    fontFamily: FONT.regular,
+    fontSize: FS.sm,
   },
   statText: {
     fontFamily: FONT.light,
     fontSize: FS.xs,
-    color: COLORS.creamFaint,
     letterSpacing: TRACKING.tight,
   },
 });

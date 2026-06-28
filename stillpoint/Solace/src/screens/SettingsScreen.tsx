@@ -18,6 +18,8 @@ import SensoryProfileCard from '@/components/shared/SensoryProfileCard';
 import ToggleRow from '@/components/shared/ToggleRow';
 import ChipRow from '@/components/shared/ChipRow';
 import { SensoryProfile, AmbientSound, RestStyle } from '@/types/settings';
+import { BackButton } from '@/components/shared/BackButton';
+import { useTheme } from '@/design/theme';
 
 const SENSORY_PROFILES: { profile: SensoryProfile; label: string; descriptor: string }[] = [
   { profile: 'full', label: 'Full', descriptor: 'Sound, haptics & motion' },
@@ -100,18 +102,23 @@ export default function SettingsScreen() {
     });
   }
 
+  const theme = useTheme();
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text style={styles.screenTitle}>Settings</Text>
+        <View style={styles.header}>
+          <BackButton />
+          <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Settings</Text>
+        </View>
 
         {/* ── Zone 1: Sensory ── */}
-        <Text style={styles.zoneLabel}>Sensory</Text>
+        <Text style={[styles.zoneLabel, { color: theme.colors.textMuted }]}>Sensory</Text>
         <View style={styles.cardsRow}>
           {SENSORY_PROFILES.map((item) => (
             <SensoryProfileCard
@@ -135,7 +142,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Zone 2: Session Timing ── */}
-        <Text style={[styles.zoneLabel, styles.zoneGap]}>Session Timing</Text>
+        <Text style={[styles.zoneLabel, styles.zoneGap, { color: theme.colors.textMuted }]}>Session Timing</Text>
 
         <ChipRow
           label="Work Duration"
@@ -163,7 +170,7 @@ export default function SettingsScreen() {
         />
 
         {/* ── Zone 3: Experience ── */}
-        <Text style={[styles.zoneLabel, styles.zoneGap]}>Experience</Text>
+        <Text style={[styles.zoneLabel, styles.zoneGap, { color: theme.colors.textMuted }]}>Experience</Text>
 
         <View style={styles.toggleSection}>
           <ToggleRow
@@ -230,7 +237,6 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.neutralDark,
   },
   scroll: {
     flex: 1,
@@ -239,12 +245,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 36,
+  },
   screenTitle: {
     fontFamily: FONT.thin,
     fontSize: 26,
-    color: COLORS.cream,
     letterSpacing: 4,
-    marginBottom: 36,
+    marginLeft: 16,
   },
   zoneLabel: {
     fontFamily: FONT.light,

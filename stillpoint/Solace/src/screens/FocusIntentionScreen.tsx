@@ -28,6 +28,9 @@ import WordTile, {
   TILE_HORIZONTAL_MARGIN,
 } from '@/components/home/WordTile';
 
+import { BackButton } from '@/components/shared/BackButton';
+import { useTheme } from '@/design/theme';
+
 type FocusNavProp = NativeStackNavigationProp<RootStackParamList, 'FocusIntention'>;
 
 // Fixed word list — order matters, never change it
@@ -49,6 +52,7 @@ const ITEM_TOTAL_WIDTH = TILE_WIDTH + TILE_HORIZONTAL_MARGIN * 2;
 export default function FocusIntentionScreen() {
   const navigation = useNavigation<FocusNavProp>();
   const { currentIntentionWord } = useSession();
+  const theme = useTheme();
 
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,11 +161,14 @@ export default function FocusIntentionScreen() {
     <View style={styles.root}>
       <StatusBar hidden />
       <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <BackButton />
+        </View>
         <Animated.View style={[styles.content, contentStyle]}>
 
           {/* Prompt text — top third */}
           <View style={styles.promptContainer}>
-            <Text style={styles.promptText}>What are you here to do?</Text>
+            <Text style={[styles.promptText, { color: theme.colors.text }]}>What are you here to do?</Text>
           </View>
 
           {/* Word tiles — horizontal FlatList, middle */}
@@ -193,7 +200,7 @@ export default function FocusIntentionScreen() {
           {/* Skip — bottom */}
           <View style={styles.skipContainer}>
             <Pressable onPress={handleSkip} hitSlop={16}>
-              <Text style={styles.skipText}>skip</Text>
+              <Text style={[styles.skipText, { color: theme.colors.textMuted }]}>skip</Text>
             </Pressable>
           </View>
 
@@ -206,10 +213,13 @@ export default function FocusIntentionScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.workBlue,
   },
   safeArea: {
     flex: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
   content: {
     flex: 1,
@@ -226,7 +236,6 @@ const styles = StyleSheet.create({
   promptText: {
     fontFamily: FONT.light,
     fontSize: FS.display,
-    color: COLORS.cream,
     textAlign: 'center',
     lineHeight: 30,
   },
@@ -246,8 +255,6 @@ const styles = StyleSheet.create({
   skipText: {
     fontFamily: FONT.light,
     fontSize: FS.md,
-    color: COLORS.cream,
-    opacity: 0.5,
     letterSpacing: TRACKING.wide,
   },
 });

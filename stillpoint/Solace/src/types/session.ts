@@ -1,4 +1,5 @@
 export type RestMode =
+  | 'eyesAway'
   | 'listen'
   | 'breatheAndDrift'
   | 'quickSettle'

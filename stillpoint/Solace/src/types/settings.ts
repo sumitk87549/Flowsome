@@ -2,9 +2,12 @@ export type AmbientSound = 'forest' | 'rain' | 'ocean' | 'desert' | 'mountain';
 
 export type SensoryProfile = 'full' | 'still' | 'quiet' | 'screenOnly';
 
-export type RestStyle = 'auto' | 'listen' | 'breathe' | 'drift' | 'quickSettle' | 'move' | 'senseAndGround' | 'storyMoment';
+export type RestStyle = 'auto' | 'eyesAway' | 'listen' | 'breathe' | 'drift' | 'quickSettle' | 'move' | 'senseAndGround' | 'storyMoment';
+
+export type ThemeMode = 'system' | 'dawn' | 'night';
 
 export interface SolaceSettings {
+  themeMode: ThemeMode;
   sensoryProfile: SensoryProfile;
   transitionsOnly: boolean;
   workDuration: number;          // in minutes: 15 | 20 | 25 | 30 | 45 | 60

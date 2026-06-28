@@ -17,6 +17,7 @@ import { COLORS } from '@/constants/colors';
 import { FONT } from '@/constants/typography';
 import { useHaptic } from '@/hooks/useHaptic';
 import { useSettings } from '@/context/SettingsContext';
+import { useTheme } from '@/design/theme';
 import {
   RETURN_BG_TRANSITION,
   RETURN_ORB_DELAY,
@@ -33,6 +34,7 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
   const { sessionNumber, totalSessions } = route.params;
   const { fire: hapticFire } = useHaptic();
   const { width } = useWindowDimensions();
+  const theme = useTheme();
   const hapticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -96,7 +98,7 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
     backgroundColor: interpolateColor(
       bgProgress.value,
       [0, 1],
-      [COLORS.forestNight, COLORS.neutralDark],
+      [theme.colors.restBg, theme.colors.background],
     ),
   }));
 
@@ -128,6 +130,14 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
     navigation.navigate('WorkSession', { intentionWord: undefined });
   };
 
+  const handleFinish = () => {
+    navigation.navigate('Home');
+  };
+
+  const handleChangeIntention = () => {
+    navigation.navigate('FocusIntention');
+  };
+
   return (
     <Animated.View style={[styles.container, bgStyle]}>
       {/* Small ambient orb using Skia */}
@@ -141,28 +151,29 @@ export default function ReturnPromptScreen({ navigation, route }: Props) {
             <RadialGradient
               c={vec(width * 0.25, width * 0.25)}
               r={width * 0.18}
-              colors={[`${COLORS.amber}33`, `${COLORS.amber}00`]}
+              colors={[`${theme.colors.accent}33`, `${theme.colors.accent}00`]}
             />
           </Circle>
         </Canvas>
       </Animated.View>
 
-      {/* Ready? tap area — covers central portion of screen */}
-      <Pressable
-        style={styles.tapArea}
-        onPress={handleReadyPress}
-        accessibilityLabel="Ready to return to work"
-      >
-        <Animated.Text style={[styles.readyText, readyStyle]}>
-          Ready?
-        </Animated.Text>
-      </Pressable>
-
-      <Animated.Text style={[styles.subLabel, subStyle]}>
-        Take your time.
+      <Animated.Text style={[styles.readyText, readyStyle, { color: theme.colors.text }]}>
+        Ready?
       </Animated.Text>
 
-      <Animated.Text style={[styles.counterText, counterStyle]}>
+      <Animated.View style={[styles.buttonsContainer, subStyle]}>
+        <Pressable style={[styles.button, { backgroundColor: theme.colors.surface }]} onPress={handleReadyPress}>
+          <Text style={[styles.buttonText, { color: theme.colors.text }]}>Begin next focus</Text>
+        </Pressable>
+        <Pressable style={[styles.button, { backgroundColor: theme.colors.surface }]} onPress={handleChangeIntention}>
+          <Text style={[styles.buttonText, { color: theme.colors.textMuted }]}>Change intention</Text>
+        </Pressable>
+        <Pressable style={styles.textButton} onPress={handleFinish}>
+          <Text style={[styles.buttonText, { color: theme.colors.textMuted }]}>Finish for now</Text>
+        </Pressable>
+      </Animated.View>
+
+      <Animated.Text style={[styles.counterText, counterStyle, { color: theme.colors.textMuted }]}>
         {`Session ${sessionNumber} of ${totalSessions}`}
       </Animated.Text>
     </Animated.View>
@@ -189,25 +200,35 @@ const styles = StyleSheet.create({
   readyText: {
     fontFamily: FONT.thin,
     fontSize: 48,
-    color: COLORS.cream,
     letterSpacing: 3,
+    marginBottom: 40,
   },
-  subLabel: {
-    position: 'absolute',
-    bottom: '30%',
-    fontFamily: FONT.light,
-    fontSize: 13,
-    color: COLORS.cream,
-    opacity: 0.65,
-    letterSpacing: 1,
+  buttonsContainer: {
+    alignItems: 'center',
+    gap: 16,
+    width: '100%',
+    paddingHorizontal: 32,
+  },
+  button: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  textButton: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontFamily: FONT.regular,
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   counterText: {
     position: 'absolute',
     bottom: '24%',
     fontFamily: FONT.light,
     fontSize: 11,
-    color: COLORS.cream,
-    opacity: 0.40,
     letterSpacing: 0.5,
   },
 });
