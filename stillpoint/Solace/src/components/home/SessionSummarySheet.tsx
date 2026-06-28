@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     top: 0,
-    backgroundColor: '#111316',
+    backgroundColor: COLORS.restSlate,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 28,

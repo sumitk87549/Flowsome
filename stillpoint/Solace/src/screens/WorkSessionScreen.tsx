@@ -1,11 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Animated, Platform, BackHandler } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAudioPlayer } from 'expo-audio';
+import AnimatedReanimated from 'react-native-reanimated';
+import { WorkSessionCanvas } from '@/components/focus/WorkSessionCanvas';
+import { useWorkSessionBackground } from '@/hooks/useWorkSessionBackground';
+import TimerDisplay from '@/components/focus/TimerDisplay';
+import { useBell } from '@/utils/bellPlayer';
 
 import { useSessionTimer } from '@/hooks/useSessionTimer';
 import { useSettings } from '@/context/SettingsContext';
@@ -35,14 +40,16 @@ export default function WorkSessionScreen() {
 
   // Pause state — use useState here because the UI needs to react to it
   const [isPaused, setIsPaused] = useState(false);
+  const [isSessionEnding, setIsSessionEnding] = useState(false);
 
   // Pause overlay opacity — use React Native's Animated.Value
   const pauseOverlayOpacity = useRef(new Animated.Value(0)).current;
 
   // Audio player for bell sound
-  const bellPlayer = useAudioPlayer(require('../../assets/sounds/bell-work-start.mp3'));
+  const workStartBell = useBell('work_start');
 
   const handleSessionComplete = useCallback(() => {
+    setIsSessionEnding(true);
     session.completeSession();
     navigation.navigate('WorkRestTransition' as any); // Or 'Transition' if defined in types
   }, [session, navigation]);
@@ -52,7 +59,21 @@ export default function WorkSessionScreen() {
     onComplete: handleSessionComplete,
   });
 
+  // Session duration in milliseconds — convert from settings (minutes → ms)
+  const sessionDurationMs = settings.workDuration * 60 * 1000;
+  
+  // Timestamp when this component mounted = session start time
+  const sessionStartMs = useRef(Date.now()).current;
+
+  // Background color ramp animated style (for Layer 1 View)
+  const backgroundAnimatedStyle = useWorkSessionBackground(sessionDurationMs, sessionStartMs);
+
   useEffect(() => {
+    // 0. Disable back button
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      return true;
+    });
+
     // 1. Activate keep-awake so screen doesn't dim
     activateKeepAwakeAsync();
 
@@ -67,10 +88,8 @@ export default function WorkSessionScreen() {
     // 4. Fire entry haptic (medium, this is a transition moment)
     fire(Haptics.ImpactFeedbackStyle.Medium, true);
 
-    // 5. Play bell sound on entry (only for 'full' or 'still' sensory profiles)
-    if (settings.sensoryProfile === 'full' || settings.sensoryProfile === 'still') {
-      bellPlayer.play();
-    }
+    // 5. Play bell sound on entry (handled implicitly by useBell if sensory profile allows)
+    workStartBell.play();
 
     // Cleanup: runs when screen unmounts
     return () => {
@@ -78,6 +97,7 @@ export default function WorkSessionScreen() {
       if (Platform.OS === 'android') {
         NavigationBar.setVisibilityAsync('visible');
       }
+      backHandler.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -110,11 +130,16 @@ export default function WorkSessionScreen() {
       {/* Hide status bar */}
       <ExpoStatusBar hidden={true} />
 
-      {/* LAYER 1 — Background */}
-      <View style={styles.backgroundLayer} />
+      {/* LAYER 1 — Animated background color that ramps over the session */}
+      <AnimatedReanimated.View
+        style={[
+          StyleSheet.absoluteFill,
+          backgroundAnimatedStyle,  // animated backgroundColor from the hook
+        ]}
+      />
 
-      {/* LAYER 2 — Skia Canvas Placeholder */}
-      <View style={styles.canvasPlaceholder} />
+      {/* LAYER 2 — Skia canvas with breathing ring, orbital rings, particles */}
+      <WorkSessionCanvas isSessionEnding={isSessionEnding} />
 
       {/* LAYER 3 — Intention Word Watermark */}
       {intentionWord ? (
@@ -124,15 +149,10 @@ export default function WorkSessionScreen() {
       ) : null}
 
       {/* LAYER 4 — Timer Display */}
-      <View style={styles.timerContainer}>
-        <Text style={styles.timerDigits}>
-          {formatTime(timer.display.minutes)}
-        </Text>
-        <Text style={styles.timerColon}>:</Text>
-        <Text style={styles.timerDigits}>
-          {formatTime(timer.display.seconds)}
-        </Text>
-      </View>
+      <TimerDisplay
+        minutes={timer.display.minutes}
+        seconds={timer.display.seconds}
+      />
 
       {/* LAYER 5 — Pause Button (top right) */}
       <Pressable
@@ -191,39 +211,6 @@ const styles = StyleSheet.create({
     color: COLORS.warmWhite,
     opacity: 0.05,
     zIndex: 2,
-  },
-
-  // LAYER 4 - Timer display container
-  timerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 3,
-  },
-
-  timerDigits: {
-    fontFamily: FONT.thin,
-    fontSize: 88,
-    fontVariant: ['tabular-nums'],
-    color: COLORS.warmWhite,
-    opacity: 1.0,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
-
-  timerColon: {
-    fontFamily: FONT.thin,
-    fontSize: 88,
-    color: COLORS.warmWhite,
-    opacity: 0.55,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    marginHorizontal: 2,
   },
 
   // LAYER 5 - Pause button (top right corner)

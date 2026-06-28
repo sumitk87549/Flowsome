@@ -12,9 +12,9 @@ import { useSettings } from '@/context/SettingsContext';
 
 const ALL_REST_MODES: RestMode[] = [
   'listen',
-  'breathe',
-  'drift',
-  'move',
+  'breatheAndDrift',
+  'quickSettle',
+  'moveAndSee',
   'senseAndGround',
   'storyMoment',
 ];

@@ -39,4 +39,16 @@ export const COLORS = {
   // Borders
   borderFaint: 'rgba(232, 223, 208, 0.10)',
   borderAmber: 'rgba(212, 149, 106, 0.60)',
+
+  // Work session background keyframes (name → hex)
+  workBg_0min:  '#1A1B2E',  // deep navy — session start
+  workBg_6min:  '#1C1F33',  // slightly cooler
+  workBg_12min: '#1E2038',  // mid-session deepening
+  workBg_18min: '#1F2140',  // darker blue
+  workBg_23min: '#1F2337',  // near-final (final color used by Transition screen)
+
+  // Sprint 7 additions
+  forestNight: '#141E1A',     // the dark green background for rest screens
+  restText:    '#EAE4D9',     // cream-warm text color for all rest mode panels
+  sageGreen:  '#8BAF9A',   // breathing dot and ripple color
 } as const;

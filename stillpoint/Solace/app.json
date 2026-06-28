@@ -8,6 +8,7 @@
     "ios": {
       "supportsTablet": false,
       "deploymentTarget": "16.4",
+      "bundleIdentifier": "com.solace.app",
       "infoPlist": {
         "UIRequiresFullScreen": true
       }
@@ -22,7 +23,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "package": "com.sumitk87549.solace"
+      "package": "com.solace.app"
     },
     "plugins": [
       "expo-font",

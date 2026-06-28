@@ -1,20 +1,33 @@
 export type RestMode =
   | 'listen'
-  | 'breathe'
-  | 'drift'
+  | 'breatheAndDrift'
   | 'quickSettle'
-  | 'move'
+  | 'moveAndSee'
   | 'senseAndGround'
-  | 'storyMoment';
+  | 'storyMoment'
+  | 'memory'
+  | 'walk';
 
 // Panel types for the rest system (types 1–4 have different behaviors)
 export interface Panel {
   type: 1 | 2 | 3 | 4;
   text: string;
   holdMs: number;
-  hapticOnEntry: boolean;
-  isEmpty: boolean;
+  hapticOnEntry?: 'light' | 'medium' | 'heavy';
+  isEmpty?: boolean;
   emptyDurationMs?: number;
+}
+
+export type StoryTheme =
+  | 'forest'
+  | 'ocean'
+  | 'mountain'
+  | 'desertNight'
+  | 'winterRoom'
+  | 'morningLight';
+
+export interface StoryPanel extends Panel {
+  theme?: StoryTheme;
 }
 
 export interface SessionState {

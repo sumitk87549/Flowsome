@@ -13,6 +13,9 @@ import CycleCompleteScreen from '@/screens/CycleCompleteScreen';
 import ReturnPromptScreen from '@/screens/ReturnPromptScreen';
 import LongBreakScreen from '@/screens/LongBreakScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
+import { TransitionScreen } from '@/screens/TransitionScreen';
+import { RestExperienceScreen } from '@/screens/RestExperienceScreen';
+import SettleNoticeScreen from '@/screens/SettleNoticeScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -38,8 +41,31 @@ export default function RootNavigator() {
         <Stack.Screen name="WorkRestTransition" component={WorkRestTransitionScreen} />
         <Stack.Screen name="RestSession" component={RestSessionScreen} />
         <Stack.Screen name="CycleComplete" component={CycleCompleteScreen} />
-        <Stack.Screen name="ReturnPrompt" component={ReturnPromptScreen} />
-        <Stack.Screen name="LongBreak" component={LongBreakScreen} />
+        <Stack.Screen 
+          name="Transition" 
+          component={TransitionScreen} 
+          options={{ animation: 'fade' }}
+        />
+        <Stack.Screen 
+          name="RestExperience" 
+          component={RestExperienceScreen} 
+          options={{ animation: 'fade' }}
+        />
+        <Stack.Screen 
+          name="SettleNotice" 
+          component={SettleNoticeScreen} 
+          options={{ animation: 'fade' }}
+        />
+        <Stack.Screen 
+          name="ReturnPrompt" 
+          component={ReturnPromptScreen} 
+          options={{ animation: 'fade' }}
+        />
+        <Stack.Screen 
+          name="LongBreak" 
+          component={LongBreakScreen} 
+          options={{ animation: 'fade' }}
+        />
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}

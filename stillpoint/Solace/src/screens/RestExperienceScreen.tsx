@@ -1,0 +1,175 @@
+// src/screens/RestExperienceScreen.tsx
+import React from 'react';
+import { View, Text, StyleSheet, BackHandler } from 'react-native';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { COLORS } from '@/constants/colors';
+import { FONT } from '@/constants/typography';
+import { useSettings } from '@/context/SettingsContext';
+import { useAmbientSound } from '@/hooks/useAmbientSound';
+import { usePanelQueue } from '@/hooks/usePanelQueue';
+import { PanelText } from '@/components/rest/PanelText';
+import { ListenMode } from '@/rest-modes/ListenMode';
+import { BreatheAndDriftMode } from '@/rest-modes/BreatheAndDriftMode';
+import { QuickSettleMode } from '@/rest-modes/QuickSettleMode';
+import MoveAndSeeMode from '@/rest-modes/MoveAndSeeMode';
+import SenseAndGroundMode from '@/rest-modes/SenseAndGroundMode';
+import StoryMomentMode from '@/rest-modes/StoryMomentMode';
+import MemoryMode from '@/rest-modes/MemoryMode';
+import WalkMode from '@/rest-modes/WalkMode';
+import type { RootStackParamList } from '@/types/navigation';
+import type { RestMode, Panel } from '@/types/session';
+import { useSession } from '@/context/SessionContext';
+
+type RestExperienceRouteProp = RouteProp<RootStackParamList, 'RestExperience'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+export function RestExperienceScreen() {
+  const route = useRoute<RestExperienceRouteProp>();
+  const navigation = useNavigation<NavigationProp>();
+  const { settings } = useSettings();
+  const ambient = useAmbientSound();
+  const { currentCycleNumber, totalCycles } = useSession();
+
+  React.useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      return true;
+    });
+    return () => backHandler.remove();
+  }, []);
+
+  const { mode, duration } = route.params;
+
+  const handleSessionComplete = React.useCallback(() => {
+    // Fade out ambient sound and navigate
+    ambient.stopAmbient(2000, () => {
+      if (settings.settleNoticeEnabled) {
+        navigation.navigate('SettleNotice', {
+          sessionNumber: currentCycleNumber,
+          totalSessions: totalCycles,
+        });
+      } else if (settings.autoStartWork) {
+        navigation.navigate('WorkSession', { intentionWord: undefined });
+      } else {
+        navigation.navigate('ReturnPrompt', {
+          sessionNumber: currentCycleNumber,
+          totalSessions: totalCycles,
+        });
+      }
+    });
+  }, [navigation, ambient, settings, currentCycleNumber, totalCycles]);
+  // Route to the correct rest mode component based on mode param
+  // Sprint 8 replaces the stub content inside each case with real mode components
+  const renderMode = () => {
+    switch (mode) {
+      case 'listen':
+        return <ListenMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'breatheAndDrift':
+        return <BreatheAndDriftMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'quickSettle':
+        return <QuickSettleMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'moveAndSee':
+        return <MoveAndSeeMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'senseAndGround':
+        return <SenseAndGroundMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'storyMoment':
+        return <StoryMomentMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'memory':
+        return <MemoryMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      case 'walk':
+        return <WalkMode duration={duration} onSessionComplete={handleSessionComplete} />;
+      default:
+        return <RestModeStub modeName="Rest" duration={duration} onComplete={handleSessionComplete} />;
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      {renderMode()}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMPORARY STUB — Sprint 8 replaces the rendering logic for each mode.
+// This stub shows the mode name and a timer, allows manual navigation forward.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface RestModeStubProps {
+  modeName: string;
+  duration: number;    // minutes
+  onComplete: () => void;
+}
+
+// Test script for DoD verification
+const TEST_PANELS: Panel[] = [
+  { type: 1, text: 'Take a breath.', holdMs: 2000, hapticOnEntry: 'light' },
+  { type: 2, text: 'You have arrived.', holdMs: 3000 },
+  { type: 3, text: 'Rest here.', holdMs: 2500 },
+];
+
+function RestModeStub({ modeName, duration, onComplete }: RestModeStubProps) {
+  const { currentPanel, currentIndex, advanceToNext } = usePanelQueue(TEST_PANELS);
+
+  // Auto-complete after the configured duration (for testing purposes)
+  React.useEffect(() => {
+    const timer = setTimeout(onComplete, duration * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <View style={stubStyles.container}>
+      <Text style={stubStyles.modeText}>{modeName}</Text>
+      <Text style={stubStyles.subText}>{duration} min · tap below when done</Text>
+      
+      {currentPanel && !currentPanel.isEmpty && (
+        <PanelText
+          key={currentIndex}
+          panel={currentPanel}
+          onExit={advanceToNext}
+        />
+      )}
+
+      <Text style={stubStyles.tapText} onPress={onComplete}>
+        End Rest (test)
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.forestNight,
+  },
+});
+
+const stubStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeText: {
+    fontFamily: FONT.thin,
+    fontSize: 32,
+    color: COLORS.restText,
+    marginBottom: 12,
+  },
+  subText: {
+    fontFamily: FONT.light,
+    fontSize: 14,
+    color: COLORS.restText,
+    opacity: 0.55,
+    marginBottom: 40,
+  },
+  tapText: {
+    fontFamily: FONT.light,
+    fontSize: 14,
+    color: COLORS.restText,
+    opacity: 0.4,
+    textDecorationLine: 'underline',
+    position: 'absolute',
+    bottom: 50,
+  },
+});

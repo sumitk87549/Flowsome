@@ -103,7 +103,7 @@ export default function HomeScreen() {
     backgroundColor: interpolateColor(
       bgProgress.value,
       [0, 1],
-      ['#000000', COLORS.neutralDark]
+      [COLORS.restSlate, COLORS.neutralDark]
     ),
   }));
 
